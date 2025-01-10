@@ -3,19 +3,27 @@ package cn.har01d.alist_tvbox.util;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Slf4j
 public final class Utils {
@@ -229,10 +237,8 @@ public final class Utils {
         StringBuilder sb = new StringBuilder();
         for (String line : content.split("\\n")) {
             String[] parts = line.split(":");
-            line = parts[0];
-            parts = line.split("\\$");
             if (parts.length == 2) {
-                sb.append(parts[0]).append(":").append(parts[1]).append("\\n");
+                sb.append(parts[1]).append(":").append(parts[0]).append("\\n");
             } else {
                 sb.append("本地:").append(line).append("\\n");
             }
@@ -265,8 +271,8 @@ public final class Utils {
 
     private static String bytesToHex(byte[] hash) {
         StringBuilder hexString = new StringBuilder(2 * hash.length);
-        for (int i = 0; i < hash.length; i++) {
-            String hex = Integer.toHexString(0xff & hash[i]);
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
             if (hex.length() == 1) {
                 hexString.append('0');
             }
@@ -291,5 +297,57 @@ public final class Utils {
 
     public static String hashPassword(String password, String slat) {
         return hash(hash(password, StaticHashSalt), slat);
+    }
+
+    public static boolean isLocalAddress() {
+        String uri = ServletUriComponentsBuilder.fromCurrentRequest().toUriString();
+        return uri.startsWith("http://192.168.");
+    }
+
+    public static void zipFile(File fileToZip, String fileName, ZipOutputStream zipOut) throws IOException {
+        if (fileToZip.isHidden()) {
+            return;
+        }
+
+        if (fileToZip.isDirectory()) {
+            if (fileName.endsWith("/")) {
+                zipOut.putNextEntry(new ZipEntry(fileName));
+                zipOut.closeEntry();
+            } else {
+                zipOut.putNextEntry(new ZipEntry(fileName + "/"));
+                zipOut.closeEntry();
+            }
+
+            File[] children = fileToZip.listFiles();
+            if (children == null) {
+                return;
+            }
+
+            for (File childFile : children) {
+                zipFile(childFile, fileName + "/" + childFile.getName(), zipOut);
+            }
+            return;
+        }
+
+        try (FileInputStream fis = new FileInputStream(fileToZip)) {
+            ZipEntry zipEntry = new ZipEntry(fileName);
+            zipOut.putNextEntry(zipEntry);
+            byte[] bytes = new byte[4096];
+            int length;
+            while ((length = fis.read(bytes)) >= 0) {
+                zipOut.write(bytes, 0, length);
+            }
+        }
+    }
+
+    public static String trim(String text) {
+        if (text == null) {
+            return null;
+        }
+        return text.trim();
+    }
+
+    public static Collection<File> listFiles(String path, String... ext) {
+        return FileUtils.listFiles(new File(path), ext, false);
     }
 }

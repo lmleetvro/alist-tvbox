@@ -42,6 +42,8 @@ public class NavigationService {
         } else {
             addRecommend();
             addIndex();
+            addUps();
+            addFollow();
         }
     }
 
@@ -54,6 +56,18 @@ public class NavigationService {
     private void addIndex() {
         if (navigationRepository.findAll().stream().filter(e -> "index$1".equals(e.getValue())).findAny().isEmpty()) {
             navigationRepository.save(new Navigation("番剧索引", "index$1", 1, true, true, 20));
+        }
+    }
+
+    private void addUps() {
+        if (navigationRepository.findAll().stream().filter(e -> "ups".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("UP主", "ups", 1, false, true, 21));
+        }
+    }
+
+    private void addFollow() {
+        if (navigationRepository.findAll().stream().filter(e -> "follow$0".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("我的关注", "follow$0", 1, true, true, 12));
         }
     }
 
@@ -81,8 +95,9 @@ public class NavigationService {
         int id = 1;
         list.add(new Navigation(id++, "推荐", "recommend$0", 1, true, true, order++));
         list.add(new Navigation(id++, "动态", "feed$0", 1, false, true, order++));
+        list.add(new Navigation(id++, "我的关注", "follow$0", 1, false, true, order++));
         list.add(new Navigation(id++, "收藏夹", "fav$0", 1, false, true, order++));
-        list.add(new Navigation(id++, "频道", "channel$0", 1, true, true, order++));
+        list.add(new Navigation(id++, "频道", "channel$0", 1, false, true, order++));
         list.add(new Navigation(id++, "历史记录", "history$0", 1, false, true, order++));
         list.add(new Navigation(id++, "全站热榜", "0", 1, true, true, order++));
         list.add(new Navigation(id++, "电影热榜", "season$2", 1, true, true, order++));
@@ -92,7 +107,7 @@ public class NavigationService {
         list.add(new Navigation(id++, "动画热榜", "season$4", 1, true, true, order++));
         list.add(new Navigation(id++, "番剧热榜", "season$1", 1, true, true, order++));
         list.add(new Navigation(id++, "热门", "pop$1", 1, true, true, order++));
-        list.add(new Navigation(id++, "国创", "167", 1, true, true, order++));  // 14
+        list.add(new Navigation(id++, "国创", "167", 1, true, true, order++));
         list.add(new Navigation(id++, "纪录片", "177", 1, true, true, order++));
         list.add(new Navigation(id++, "电影", "23", 1, true, true, order++));
         list.add(new Navigation(id++, "电视剧", "11", 1, true, true, order++));
@@ -116,11 +131,12 @@ public class NavigationService {
         list.add(new Navigation(id++, "原创", "origin$0", 1, false, true, order++));
         list.add(new Navigation(id++, "新人", "rookie$0", 1, false, true, order++));
         list.add(new Navigation(id++, "番剧索引", "index$1", 1, true, true, 20));
+        list.add(new Navigation(id++, "UP主", "ups", 1, false, true, 21));
 
         navigationRepository.saveAll(list);
         list = new ArrayList<>();
 
-        int parent = 14;
+        int parent = 15;
         order = 1;
         list.add(new Navigation("国产动画", "153", 2, true, true, order++, parent));
         list.add(new Navigation("国产原创", "168", 2, true, true, order++, parent));

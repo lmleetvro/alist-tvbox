@@ -51,10 +51,10 @@ public class TaskService {
         });
     }
 
-    public Task addIndexTask(Site site) {
+    public Task addIndexTask(Site site, String indexName) {
         Task task = new Task();
         task.setType(TaskType.INDEX);
-        task.setName("索引站点 - " + site.getName());
+        task.setName("索引站点 - " + site.getName() + " - " + indexName);
         task.setCreatedTime(Instant.now());
         return taskRepository.save(task);
     }
@@ -63,6 +63,14 @@ public class TaskService {
         Task task = new Task();
         task.setType(TaskType.SCRAPE);
         task.setName("刮削索引文件 - " + site.getName());
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
+    public Task addSyncMeta() {
+        Task task = new Task();
+        task.setType(TaskType.SYNC_META);
+        task.setName("同步电影数据");
         task.setCreatedTime(Instant.now());
         return taskRepository.save(task);
     }
@@ -82,11 +90,11 @@ public class TaskService {
         taskRepository.save(task);
     }
 
-    public void updateTaskSummary(Integer id, String summary) {
+    public Task updateTaskSummary(Integer id, String summary) {
         Task task = getById(id);
         task.setSummary(summary);
         task.setUpdatedTime(Instant.now());
-        taskRepository.save(task);
+        return taskRepository.save(task);
     }
 
     public void completeTask(Integer id) {

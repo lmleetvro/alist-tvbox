@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.AccountDto;
+import cn.har01d.alist_tvbox.dto.CheckinLog;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
@@ -42,6 +43,11 @@ public class AccountController {
         return accountService.checkin(id, force);
     }
 
+    @GetMapping("/api/ali/accounts/{id}/checkin")
+    public List<CheckinLog> getCheckinLogs(@PathVariable Integer id) {
+        return accountService.getCheckinLogs(id);
+    }
+
     @PostMapping("/api/ali/accounts/{id}")
     public Account update(@PathVariable Integer id, @RequestBody AccountDto account) {
         return accountService.update(id, account);
@@ -55,6 +61,11 @@ public class AccountController {
     @GetMapping("/ali/token/{id}")
     public String getAliToken(@PathVariable String id) {
         return accountService.getAliRefreshToken(id);
+    }
+
+    @GetMapping("/ali/open/{id}")
+    public String getAliOpenRefreshToken(@PathVariable String id) {
+        return accountService.getAliOpenRefreshToken(id);
     }
 
     @PostMapping("/api/alist/login")

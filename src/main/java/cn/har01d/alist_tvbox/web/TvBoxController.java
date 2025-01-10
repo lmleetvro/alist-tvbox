@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.TokenDto;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.net.URLDecoder;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -30,48 +29,49 @@ public class TvBoxController {
     }
 
     @GetMapping("/vod1")
-    public Object api1(String t, String f, String ids, String wd, String sort,
+    public Object api1(String t, String f, String ids, String ac, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
-        return api("", t, f, ids, wd, sort, pg, 0, request);
+        return api("", t, f, ids, ac, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod1/{token}")
-    public Object api1(@PathVariable String token, String t, String f, String ids, String wd, String sort,
+    public Object api1(@PathVariable String token, String t, String f, String ids, String ac, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
-        return api(token, t, f, ids, wd, sort, pg, 0, request);
+        return api(token, t, f, ids, ac, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod")
-    public Object api(String t, String f, String ids, String wd, String sort,
+    public Object api(String t, String f, String ids, String ac, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) {
-        return api("", t, f, ids, wd, sort, pg, 1, request);
+        return api("", t, f, ids, ac, wd, sort, pg, 1, request);
     }
 
     @GetMapping("/vod/{token}")
-    public Object api(@PathVariable String token, String t, String f, String ids, String wd, String sort,
+    public Object api(@PathVariable String token, String t, String f, String ids, String ac, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       @RequestParam(required = false, defaultValue = "1") Integer type,
                       HttpServletRequest request) {
-        if (!subscriptionService.getToken().equals(token)) {
-            throw new BadRequestException();
-        }
+        subscriptionService.checkToken(token);
 
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("type: {}  path: {}  folder: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, wd, f, sort, pg);
+        String client = request.getHeader("X-CLIENT");
+        log.info("type: {}  path: {}  folder: {}  ac: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, ac, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
                 return tvBoxService.msearch(type, ids.substring(8));
             } else if (ids.equals("recommend")) {
-                return tvBoxService.recommend();
+                return tvBoxService.recommend(ac, pg);
             }
-            return tvBoxService.getDetail(ids);
+            return tvBoxService.getDetail(ac, ids);
         } else if (t != null && !t.isEmpty()) {
-            return tvBoxService.getMovieList(t, f, sort, pg);
+            if (t.equals("0")) {
+                return tvBoxService.recommend(ac, pg);
+            }
+            return tvBoxService.getMovieList(client, ac, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return tvBoxService.search(type, wd);
+            return tvBoxService.search(type, ac, wd, pg);
         } else {
             return tvBoxService.getCategoryList(type);
         }
@@ -82,17 +82,17 @@ public class TvBoxController {
         return subscriptionService.getProfiles();
     }
 
-    @GetMapping("/token")
+    @GetMapping("/api/token")
     public String getToken() {
-        return subscriptionService.getToken();
+        return subscriptionService.getTokens();
     }
 
-    @PostMapping("/token")
+    @PostMapping("/api/token")
     public String createToken(@RequestBody TokenDto dto) {
         return subscriptionService.createToken(dto);
     }
 
-    @DeleteMapping("/token")
+    @DeleteMapping("/api/token")
     public void deleteToken() {
         subscriptionService.deleteToken();
     }
@@ -104,50 +104,44 @@ public class TvBoxController {
 
     @GetMapping("/sub/{token}/{id}")
     public Map<String, Object> subscription(@PathVariable String token, @PathVariable String id) {
-        if (!subscriptionService.getToken().equals(token)) {
-            throw new BadRequestException();
-        }
+        subscriptionService.checkToken(token);
 
-        return subscriptionService.subscription(id);
+        return subscriptionService.subscription(token, id);
     }
 
     @GetMapping("/open")
-    public Map<String, Object> open() {
+    public Map<String, Object> open() throws IOException {
         return open("");
     }
 
     @GetMapping("/open/{token}")
-    public Map<String, Object> open(@PathVariable String token) {
-        if (!subscriptionService.getToken().equals(token)) {
-            throw new BadRequestException();
-        }
+    public Map<String, Object> open(@PathVariable String token) throws IOException {
+        subscriptionService.checkToken(token);
 
         return subscriptionService.open();
     }
 
+    @GetMapping("/node/{token}/{file}")
+    public String node(@PathVariable String token, @PathVariable String file) throws IOException {
+        subscriptionService.checkToken(token);
+
+        return subscriptionService.node(file);
+    }
+
+    @PostMapping("/api/cat/sync")
+    public int syncCat() {
+        return subscriptionService.syncCat();
+    }
+
     @GetMapping(value = "/repo/{id}", produces = "application/json")
-    public String repository(@PathVariable int id) {
+    public String repository(@PathVariable String id) {
         return repository("", id);
     }
 
     @GetMapping(value = "/repo/{token}/{id}", produces = "application/json")
-    public String repository(@PathVariable String token, @PathVariable int id) {
-        if (!subscriptionService.getToken().equals(token)) {
-            throw new BadRequestException();
-        }
+    public String repository(@PathVariable String token, @PathVariable String id) {
+        subscriptionService.checkToken(token);
 
-        return subscriptionService.repository(id);
-    }
-
-    private String decodeUrl(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        try {
-            return URLDecoder.decode(text, "UTF-8");
-        } catch (Exception e) {
-            return text;
-        }
+        return subscriptionService.repository(token, id);
     }
 }

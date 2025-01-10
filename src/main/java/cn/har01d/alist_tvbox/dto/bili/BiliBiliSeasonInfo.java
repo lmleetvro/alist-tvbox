@@ -15,6 +15,7 @@ public class BiliBiliSeasonInfo {
     private String titleFormat;
     private String long_title;
     private String url;
+    private String link;
     private String cover;
     private String badge;
     private String desc;
@@ -25,6 +26,6 @@ public class BiliBiliSeasonInfo {
     public static class Stats {
         private int danmaku;
         private int follow;
-        private int view;
+        private long view;
     }
 }

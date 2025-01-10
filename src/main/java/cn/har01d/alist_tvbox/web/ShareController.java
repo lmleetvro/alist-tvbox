@@ -1,8 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.SharesDto;
-import cn.har01d.alist_tvbox.dto.UrlDto;
 import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.service.ShareService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.Page;
@@ -50,19 +51,34 @@ public class ShareController {
         shareService.deleteShares(ids);
     }
 
-    @PostMapping("/api/tacit0924")
-    public void getTacit0924() {
-        shareService.getTacit0924();
-    }
-
 //    @GetMapping("/api/resources")
 //    public Page<ShareInfo> listResources(Pageable pageable) {
 //        return shareService.listResources(pageable);
 //    }
 
+    @GetMapping("/quark/cookie/{id}")
+    public String getQuarkCookie(@PathVariable String id) {
+        return shareService.getQuarkCookie(id);
+    }
+
+    @GetMapping("/uc/cookie/{id}")
+    public String getUcCookie(@PathVariable String id) {
+        return shareService.getUcCookie(id);
+    }
+
+    @GetMapping("/115/cookie/{id}")
+    public String get115Cookie(@PathVariable String id) {
+        return shareService.get115Cookie(id);
+    }
+
     @GetMapping("/api/storages")
     public Object listStorages(Pageable pageable) {
         return shareService.listStorages(pageable);
+    }
+
+    @PostMapping("/api/storages/{id}")
+    public Response reloadStorage(@PathVariable Integer id) {
+        return shareService.reloadStorage(id);
     }
 
     @PostMapping("/api/import-shares")
@@ -76,7 +92,7 @@ public class ShareController {
     }
 
     @PostMapping("/api/open-token-url")
-    public void updateOpenTokenUrl(@RequestBody UrlDto dto) {
-        shareService.updateOpenTokenUrl(dto.getUrl());
+    public void updateOpenTokenUrl(@RequestBody OpenApiDto dto) {
+        shareService.updateOpenTokenUrl(dto);
     }
 }

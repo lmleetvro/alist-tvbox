@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -15,7 +16,13 @@ import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.model.SearchListResponse;
 import cn.har01d.alist_tvbox.model.SearchRequest;
 import cn.har01d.alist_tvbox.model.SearchResult;
+import cn.har01d.alist_tvbox.model.ShareInfo;
+import cn.har01d.alist_tvbox.model.ShareInfoResponse;
+import cn.har01d.alist_tvbox.model.VideoPreview;
+import cn.har01d.alist_tvbox.model.VideoPreviewResponse;
 import cn.har01d.alist_tvbox.util.Constants;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -26,10 +33,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -41,13 +47,21 @@ public class AListService {
 
     private final RestTemplate restTemplate;
     private final SiteService siteService;
+    private final AppProperties appProperties;
+    private final Cache<String, VideoPreview> cache = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(895))
+            .build();
 
-    public AListService(RestTemplateBuilder builder, SiteService siteService) {
+    public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .setConnectTimeout(Duration.ofSeconds(60))
+                .setReadTimeout(Duration.ofSeconds(60))
                 .build();
         this.siteService = siteService;
+        this.appProperties = appProperties;
     }
 
     public List<SearchResult> search(Site site, String keyword) {
@@ -83,7 +97,7 @@ public class AListService {
 
     public FsResponse listFiles(Site site, String path, int page, int size) {
         int version = getVersion(site);
-        String url = site.getUrl() + (version == 2 ? "/api/public/path" : "/api/fs/list");
+        String url = getUrl(site) + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
@@ -100,6 +114,9 @@ public class AListService {
     }
 
     private FsResponse getFiles(int version, FsResponse response) {
+        if (response == null) {
+            return null;
+        }
         if (version == 2) {
             for (FsInfo fsInfo : response.getFiles()) {
                 fsInfo.setThumb(fsInfo.getThumbnail());
@@ -126,6 +143,48 @@ public class AListService {
         return true;
     }
 
+    public ShareInfo getShareInfo(Site site, String path) {
+        String url = getUrl(site) + "/api/fs/other";
+        FsRequest request = new FsRequest();
+        request.setMethod("share_info");
+        request.setPassword(site.getPassword());
+        request.setPath(path);
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
+        log.debug("call api: {} request: {}", url, request);
+        ShareInfoResponse response = post(site, url, request, ShareInfoResponse.class);
+        logError(response);
+        log.debug("getShareInfo: {} {}", path, response.getData());
+        return response.getData();
+    }
+
+    public VideoPreview preview(Site site, String path) {
+        String id = site.getId() + "-" + path;
+        VideoPreview preview = cache.getIfPresent(id);
+        if (preview != null) {
+            log.debug("cache: {}", id);
+            return preview;
+        }
+
+        String url = getUrl(site) + "/api/fs/other";
+        FsRequest request = new FsRequest();
+        request.setPassword(site.getPassword());
+        request.setPath(path);
+        request.setData("preview");
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
+        log.debug("call api: {} request: {}", url, request);
+        VideoPreviewResponse response = post(site, url, request, VideoPreviewResponse.class);
+        logError(response);
+        log.debug("preview urls: {} {}", path, response.getData());
+        if (response.getData() != null) {
+            cache.put(id, response.getData());
+        }
+        return response.getData();
+    }
+
     public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {
@@ -136,7 +195,7 @@ public class AListService {
     }
 
     private FsDetail getFileV3(Site site, String path) {
-        String url = site.getUrl() + "/api/fs/get";
+        String url = getUrl(site) + "/api/fs/get";
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
@@ -146,21 +205,12 @@ public class AListService {
         log.debug("call api: {} request: {}", url, request);
         FsDetailResponse response = post(site, url, request, FsDetailResponse.class);
         logError(response);
-        if (response.getData() == null && "object not found".equals(response.getMessage()) && site.getId() == 1) {
-            try {
-                Map<String, String> body = new HashMap<>();
-                body.put("path", path);
-                restTemplate.postForObject("http://stats.har01d.cn/movies", body, String.class);
-            } catch (Exception e) {
-                // ignore
-            }
-        }
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
     }
 
     private FsDetail getFileV2(Site site, String path) {
-        String url = site.getUrl() + "/api/public/path";
+        String url = getUrl(site) + "/api/public/path";
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
@@ -195,7 +245,7 @@ public class AListService {
             return site.getVersion();
         }
 
-        String url = site.getUrl() + "/api/public/settings";
+        String url = getUrl(site) + "/api/public/settings";
         log.debug("call api: {}", url);
         String text = get(site, url, String.class);
         int version;
@@ -209,6 +259,13 @@ public class AListService {
         siteService.save(site);
 
         return version;
+    }
+
+    private String getUrl(Site site) {
+        if (site.getId() == 1) {
+            return appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
+        }
+        return site.getUrl();
     }
 
     private <T> T get(Site site, String url, Class<T> responseType) {

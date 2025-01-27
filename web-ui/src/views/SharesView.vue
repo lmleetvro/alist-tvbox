@@ -1,13 +1,13 @@
 <template>
-  <h2>分享列表</h2>
+  <h2>资源列表</h2>
   <el-row justify="end">
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
-    <el-button type="success" @click="reload">Tacit0924</el-button>
+    <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
+    <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
-  <div class="space"></div>
 
   <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
     <el-table-column type="selection" width="55"/>
@@ -15,21 +15,37 @@
     <el-table-column prop="path" label="路径" sortable/>
     <el-table-column label="完整路径" width="380" sortable>
       <template #default="scope">
-        {{fullPath(scope.row)}}
+        {{ fullPath(scope.row) }}
       </template>
     </el-table-column>
     <el-table-column prop="url" label="分享链接">
       <template #default="scope">
-        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
-        <a v-else-if="scope.row.type!=2" :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
+        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">
+          https://mypikpak.com/s/{{ scope.row.shareId }}
+        </a>
+        <a v-else-if="scope.row.type==0" :href="getShareLink(scope.row)" target="_blank">
+          https://www.alipan.com/s/{{ scope.row.shareId }}
+        </a>
+        <a v-else-if="scope.row.type==5" :href="getShareLink(scope.row)" target="_blank">
+          https://pan.quark.cn/s/{{ scope.row.shareId }}
+        </a>
+        <a v-else-if="scope.row.type==7" :href="getShareLink(scope.row)" target="_blank">
+          https://fast.uc.cn/s/{{ scope.row.shareId }}
+        </a>
+        <a v-else-if="scope.row.type==8" :href="getShareLink(scope.row)" target="_blank">
+          https://115.com/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
     <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
-        <span v-else-if="scope.row.type==2">夸克网盘</span>
-        <span v-else>阿里云盘</span>
+        <span v-else-if="scope.row.type==4">本地存储</span>
+        <span v-else-if="scope.row.type==5">夸克分享</span>
+        <span v-else-if="scope.row.type==7">UC分享</span>
+        <span v-else-if="scope.row.type==8">115分享</span>
+        <span v-else>阿里分享</span>
       </template>
     </el-table-column>
     <el-table-column fixed="right" label="操作" width="200">
@@ -40,8 +56,45 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next" :current-page="page" :page-size="size" :total="total"
-                   @current-change="loadShares"/>
+    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size"
+                   :total="total"
+                   @current-change="loadShares" @size-change="handleSizeChange"/>
+  </div>
+
+  <div class="space"></div>
+  <h2>失败资源</h2>
+  <el-row justify="end">
+    <el-button @click="refreshStorages">刷新</el-button>
+    <el-button type="danger" @click="dialogVisible1=true" v-if="selectedStorages.length">删除</el-button>
+  </el-row>
+  <el-table :data="storages" border @selection-change="handleSelectionStorages" style="width: 100%">
+    <el-table-column type="selection" width="55"/>
+    <el-table-column prop="id" label="ID" width="70"/>
+    <el-table-column prop="mount_path" label="路径"/>
+    <el-table-column prop="status" label="状态" width="260"/>
+    <el-table-column prop="driver" label="类型" width="120">
+      <template #default="scope">
+        <span v-if="scope.row.driver=='AliyundriveShare2Open'">阿里分享</span>
+        <span v-else-if="scope.row.driver=='PikPakShare'">PikPak分享</span>
+        <span v-else-if="scope.row.driver=='QuarkShare'">夸克分享</span>
+        <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
+        <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
+        <span v-else-if="scope.row.driver=='Local'">本地存储</span>
+        <span v-else-if="scope.row.driver=='Alias'">别名</span>
+        <span v-else>{{ scope.row.driver }}</span>
+      </template>
+    </el-table-column>
+    <el-table-column fixed="right" label="操作" width="130">
+      <template #default="scope">
+        <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
+        <el-button link type="danger" size="small" @click="handleDeleteStorage(scope.row)">删除</el-button>
+      </template>
+    </el-table-column>
+  </el-table>
+  <div>
+    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1"
+                   :page-size="size1"
+                   @current-change="loadStorages" @size-change="handleSize1Change"/>
   </div>
 
   <el-dialog v-model="formVisible" :title="dialogTitle">
@@ -49,26 +102,34 @@
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2" label="分享ID" label-width="140" required>
+      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=3&&form.type!=4" label="分享ID" label-width="140"
+                    required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2" label="密码" label-width="140">
+      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=4" :label="form.type==3?'Token':'密码'"
+                    label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type==2" label="Cookie" label-width="140">
-        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"/>
+      <el-form-item v-if="form.type==2||form.type==6||form.type==3" label="Cookie" label-width="140">
+        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"
+                  :placeholder="form.type==3?'Cookie或者Token必填一项':'Cookie必填'"/>
       </el-form-item>
-      <el-form-item label="文件夹ID" label-width="140">
-        <el-input v-model="form.folderId" autocomplete="off" placeholder="默认为根目录或者从分享链接读取"/>
+      <el-form-item :label="form.type==4?'本地路径':'文件夹ID'" label-width="140">
+        <el-input v-model="form.folderId" autocomplete="off"
+                  :placeholder="form.type==4?'':'默认为根目录或者从分享链接读取'"/>
       </el-form-item>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="form.type" class="ml-4">
-          <el-radio :label="0" size="large">阿里云盘</el-radio>
+          <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
-          <el-radio :label="2" size="large">夸克网盘</el-radio>
+          <el-radio :label="5" size="large">夸克分享</el-radio>
+          <el-radio :label="7" size="large">UC分享</el-radio>
+          <el-radio :label="8" size="large">115分享</el-radio>
+          <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
-      <span v-if="form.path">完整路径： {{fullPath(form)}}</span>
+      <span v-if="form.path">完整路径： {{ fullPath(form) }}</span>
+      <div>网盘帐号在帐号页面添加。</div>
     </el-form>
     <template #footer>
       <span class="dialog-footer">
@@ -78,12 +139,12 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="dialogVisible" title="删除分享" width="30%">
+  <el-dialog v-model="dialogVisible" title="删除资源" width="30%">
     <div v-if="batch">
-      <p>是否删除选中的{{ multipleSelection.length }}个分享?</p>
+      <p>是否删除选中的{{ multipleSelection.length }}个资源?</p>
     </div>
     <div v-else>
-      <p>是否删除分享 - {{ form.shareId }}</p>
+      <p>是否删除资源 - {{ form.shareId }}</p>
       <p>{{ form.path }}</p>
     </div>
     <template #footer>
@@ -94,20 +155,42 @@
     </template>
   </el-dialog>
 
+  <el-dialog v-model="dialogVisible1" title="删除资源" width="30%">
+    <div v-if="selectedStorages.length">
+      <p>是否删除选中的{{ selectedStorages.length }}个资源?</p>
+    </div>
+    <div v-else>
+      <p>是否删除资源 - {{ storage.id }}</p>
+      <p>{{ storage.mount_path }}</p>
+    </div>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="dialogVisible1 = false">取消</el-button>
+        <el-button type="danger" @click="deleteStorage">删除</el-button>
+      </span>
+    </template>
+  </el-dialog>
+
   <el-dialog v-model="uploadVisible" title="导入分享" width="50%">
-    <el-form-item label="类型" label-width="140">
-      <el-radio-group v-model="sharesDto.type" class="ml-4">
-        <el-radio :label="0" size="large">阿里云盘</el-radio>
-        <el-radio :label="1" size="large">PikPak分享</el-radio>
-      </el-radio-group>
-    </el-form-item>
-    <el-form-item label="分享内容" label-width="120">
-      <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享"/>
-    </el-form-item>
+    <el-form>
+      <el-form-item label="类型" label-width="140">
+        <el-radio-group v-model="sharesDto.type" class="ml-4">
+          <el-radio :label="0" size="large">阿里分享</el-radio>
+          <el-radio :label="1" size="large">PikPak分享</el-radio>
+          <el-radio :label="5" size="large">夸克分享</el-radio>
+          <el-radio :label="7" size="large">UC分享</el-radio>
+          <el-radio :label="8" size="large">115分享</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="分享内容" label-width="120">
+        <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享，挂载路径+分享链接"/>
+      </el-form-item>
+      <el-progress v-if="uploading" :percentage="100" status="success" :indeterminate="true" :duration="5"/>
+    </el-form>
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button class="ml-3" type="success" @click="submitUpload">导入</el-button>
+        <el-button class="ml-3" type="success" :disabled="uploading" @click="submitUpload">导入</el-button>
       </span>
     </template>
   </el-dialog>
@@ -115,8 +198,11 @@
   <el-dialog v-model="exportVisible" title="导出分享" width="30%">
     <el-form-item label="类型" label-width="140">
       <el-radio-group v-model="form.type" class="ml-4">
-        <el-radio :label="0" size="large">阿里云盘</el-radio>
+        <el-radio :label="0" size="large">阿里分享</el-radio>
         <el-radio :label="1" size="large">PikPak分享</el-radio>
+        <el-radio :label="5" size="large">夸克分享</el-radio>
+        <el-radio :label="7" size="large">UC分享</el-radio>
+        <el-radio :label="8" size="large">115分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
@@ -148,20 +234,38 @@ interface ShareInfo {
   type: number
 }
 
+interface Storage {
+  id: number
+  mount_path: string
+  driver: string
+  status: string
+  addition: string
+}
+
 const multipleSelection = ref<ShareInfo[]>([])
+const storages = ref<Storage[]>([])
+const selectedStorages = ref<Storage[]>([])
+const storage = ref<Storage>({
+  id: 0,
+  mount_path: '',
+  driver: '',
+  status: '',
+  addition: ''
+})
 const page = ref(1)
-const size = ref(20)
-const total = ref(0)
 const page1 = ref(1)
+const size = ref(20)
 const size1 = ref(20)
+const total = ref(0)
 const total1 = ref(0)
-const resources = ref([])
 const shares = ref([])
 const dialogTitle = ref('')
 const formVisible = ref(false)
 const uploadVisible = ref(false)
+const uploading = ref(false)
 const exportVisible = ref(false)
 const dialogVisible = ref(false)
+const dialogVisible1 = ref(false)
 const updateAction = ref(false)
 const batch = ref(false)
 const form = ref({
@@ -194,7 +298,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (data: ShareInfo) => {
-  dialogTitle.value = '更新分享 - ' + data.shareId
+  dialogTitle.value = '更新分享 - ' + data.id
   updateAction.value = true
   form.value = {
     id: data.id,
@@ -212,6 +316,11 @@ const handleDelete = (data: any) => {
   batch.value = false
   form.value = data
   dialogVisible.value = true
+}
+
+const handleDeleteStorage = (data: any) => {
+  storage.value = data
+  dialogVisible1.value = true
 }
 
 const handleDeleteBatch = () => {
@@ -232,6 +341,19 @@ const deleteSub = () => {
   }
 }
 
+const deleteStorage = () => {
+  dialogVisible1.value = false
+  if (selectedStorages.value.length) {
+    axios.post('/api/delete-shares', selectedStorages.value.map(s => s.id)).then(() => {
+      loadStorages(page1.value)
+    })
+  } else {
+    axios.delete('/api/shares/' + storage.value.id).then(() => {
+      loadStorages(page1.value)
+    })
+  }
+}
+
 const handleCancel = () => {
   formVisible.value = false
 }
@@ -243,8 +365,14 @@ const fullPath = (share: any) => {
   }
   if (share.type == 1) {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
-  } else if (share.type == 2) {
-    return '/\uD83C\uDF1E我的夸克网盘/' + path
+  } else if (share.type == 5) {
+    return '/我的夸克分享/' + path
+  } else if (share.type == 7) {
+    return '/我的UC分享/' + path
+  } else if (share.type == 8) {
+    return '/我的115分享/' + path
+  } else if (share.type == 4) {
+    return path
   } else {
     return '/\uD83C\uDE34我的阿里分享/' + path
   }
@@ -258,12 +386,20 @@ const handleConfirm = () => {
 }
 
 const getShareLink = (shareInfo: ShareInfo) => {
+  let url = ''
   if (shareInfo.type == 1) {
-    return 'https://mypikpak.com/s/' + shareInfo.shareId
-  }
-  let url = 'https://www.aliyundrive.com/s/' + shareInfo.shareId
-  if (shareInfo.folderId) {
-    url = url + '/folder/' + shareInfo.folderId
+    url = 'https://mypikpak.com/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 5) {
+    url = 'https://pan.quark.cn/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 7) {
+    url = 'https://fast.uc.cn/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 8) {
+    url = 'https://115.com/s/' + shareInfo.shareId
+  } else {
+    url = 'https://www.alipan.com/s/' + shareInfo.shareId
+    if (shareInfo.folderId) {
+      url = url + '/folder/' + shareInfo.folderId
+    }
   }
   if (shareInfo.password) {
     url = url + '?password=' + shareInfo.password
@@ -279,12 +415,61 @@ const loadShares = (value: number) => {
   })
 }
 
+const loadStorages = (value: number) => {
+  page1.value = value
+  axios.get('/api/storages?page=' + page1.value + '&size=' + size1.value).then(({data}) => {
+    storages.value = data.data.content
+    total1.value = data.data.total
+  })
+}
+
+const reloadStorage = (id: number) => {
+  axios.post('/api/storages/' + id).then(({data}) => {
+    if (data.code == 200) {
+      ElMessage.success('加载成功')
+      loadStorages(page1.value)
+    } else {
+      ElMessage.error(data.message)
+    }
+  })
+}
+
+const refreshShares = () => {
+  loadShares(page.value)
+}
+
+const refreshStorages = () => {
+  loadStorages(page1.value)
+}
+
+const handleSizeChange = (value: number) => {
+  size.value = value
+  page.value = 1
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+    shares.value = data.content
+    total.value = data.totalElements
+  })
+}
+
+const handleSize1Change = (value: number) => {
+  size1.value = value
+  loadStorages(1)
+}
+
 const reload = () => {
-  axios.post('/api/tacit0924').then()
+  axios.post('/api/tacit0924').then(() => {
+    ElMessage.success('更新成功')
+    loadShares(page.value)
+  })
 }
 
 const submitUpload = () => {
-  axios.post('/api/import-shares', sharesDto.value).then()
+  uploading.value = true
+  axios.post('/api/import-shares', sharesDto.value).then(({data}) => {
+    uploadSuccess(data)
+  }, (err) => {
+    uploadError(err)
+  })
 }
 
 const exportShares = () => {
@@ -292,12 +477,15 @@ const exportShares = () => {
 }
 
 const uploadSuccess = (response: any) => {
+  uploading.value = false
   uploadVisible.value = false
+  sharesDto.value.content = ''
   loadShares(page.value)
   ElMessage.success('成功导入' + response + '个分享')
 }
 
 const uploadError = (error: Error) => {
+  uploading.value = false
   ElMessage.error('导入失败：' + error)
 }
 
@@ -305,11 +493,18 @@ const handleSelectionChange = (val: ShareInfo[]) => {
   multipleSelection.value = val
 }
 
+const handleSelectionStorages = (val: Storage[]) => {
+  selectedStorages.value = val
+}
+
 onMounted(() => {
   loadShares(page.value)
+  loadStorages(page1.value)
 })
 </script>
 
 <style scoped>
-
+.space {
+  margin: 12px 0;
+}
 </style>

@@ -20,6 +20,9 @@ import IndexView from "@/views/IndexView.vue";
 import BiliBiliView from "@/views/BiliBiliView.vue";
 import SystemInfo from "@/views/SystemInfo.vue";
 import MetaView from "@/views/MetaView.vue";
+import TmdbView from "@/views/TmdbView.vue";
+import EmbyView from "@/views/EmbyView.vue";
+import LiveView from "@/views/LiveView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -74,6 +77,12 @@ const router = createRouter({
       meta: {auth: true}
     },
     {
+      path: '/emby',
+      name: 'emby',
+      component: EmbyView,
+      meta: {auth: true}
+    },
+    {
       path: '/bilibili',
       name: 'bilibili',
       component: BiliBiliView,
@@ -89,6 +98,12 @@ const router = createRouter({
       path: '/meta',
       name: 'meta',
       component: MetaView,
+      meta: {auth: true}
+    },
+    {
+      path: '/tmdb',
+      name: 'tmdb',
+      component: TmdbView,
       meta: {auth: true}
     },
     {
@@ -125,6 +140,18 @@ const router = createRouter({
       path: '/sub/:id',
       name: 'sub',
       component: SubView,
+      meta: {auth: true}
+    },
+    {
+      path: '/live',
+      name: 'liveHome',
+      component: LiveView,
+      meta: {auth: true}
+    },
+    {
+      path: '/live/:id',
+      name: 'live',
+      component: LiveView,
       meta: {auth: true}
     },
     {

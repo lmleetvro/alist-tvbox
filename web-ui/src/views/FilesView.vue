@@ -8,7 +8,7 @@
     <div class="space"></div>
 
     <el-table :data="files" border style="width: 100%">
-      <el-table-column prop="id" label="ID" width="70"/>
+<!--      <el-table-column prop="id" label="ID" width="70"/>-->
       <el-table-column prop="dir" label="文件目录" width="250"/>
       <el-table-column prop="name" label="文件名称" width="180"/>
       <el-table-column prop="path" label="完整路径"/>
@@ -23,6 +23,14 @@
     <el-dialog v-model="formVisible" :fullscreen="fullscreen" :title="dialogTitle">
       <el-form :model="form">
         <el-form-item label="目录" label-width="120" required>
+          <el-select v-model="form.dir">
+            <el-option
+              v-for="item in options"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
           <el-input v-model="form.dir" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="名称" label-width="120" required>
@@ -49,7 +57,7 @@
       </div>
       <h2>JSON数据</h2>
       <el-scrollbar height="800px">
-        <json-viewer :value="jsonData" expanded copyable :expand-depth=5></json-viewer>
+        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=5></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
@@ -87,10 +95,11 @@ const fullscreen = ref(false)
 const form = ref({
   id: 0,
   name: '',
-  dir: '/www/tvbox',
+  dir: '/data',
   path: '',
   content: ''
 })
+const options = ['/data', '/www/tvbox', '/www/files', '/www/cat', '/www/pg', '/www/pg/lib', '/www/zx']
 
 const handleAdd = () => {
   dialogTitle.value = '添加配置文件'
@@ -98,7 +107,7 @@ const handleAdd = () => {
   form.value = {
     id: 0,
     name: '',
-    dir: '/www/tvbox',
+    dir: '/data',
     path: '',
     content: ''
   }

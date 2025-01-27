@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.dto.Versions;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.service.DoubanService;
 import cn.har01d.alist_tvbox.service.IndexService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.List;
 
+@Slf4j
 @RestController
 public class DoubanController {
     private final DoubanService service;
@@ -42,9 +45,9 @@ public class DoubanController {
         return service.addMeta(dto);
     }
 
-    @PostMapping("/api/meta/{id}/movie")
-    public boolean updateMetaMovie(@PathVariable Integer id, Integer movieId) {
-        return service.updateMetaMovie(id, movieId);
+    @PostMapping("/api/meta/{id}")
+    public boolean updateMetaMovie(@PathVariable Integer id, @RequestBody MetaDto dto) {
+        return service.updateMetaMovie(id, dto);
     }
 
     @PostMapping("/api/fix-meta")
@@ -65,6 +68,14 @@ public class DoubanController {
     @DeleteMapping("/api/meta/{id}")
     public void delete(@PathVariable Integer id) {
         metaRepository.deleteById(id);
+    }
+
+    @PostMapping("/api/meta-batch-delete")
+    public void batchDelete(@RequestBody List<Integer> ids) {
+        metaRepository.findAllById(ids).forEach(meta -> {
+            log.warn("delete {} {}", meta.getId(), meta.getPath());
+            metaRepository.delete(meta);
+        });
     }
 
     @GetMapping("/api/versions")

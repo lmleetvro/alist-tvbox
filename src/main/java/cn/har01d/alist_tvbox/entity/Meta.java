@@ -5,12 +5,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToOne;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.TableGenerator;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -28,6 +30,12 @@ public class Meta {
     @Column(name = "`year`")
     private Integer year;
     private Integer score;
-    @OneToOne
+    @ManyToOne
     private Movie movie;
+    private String type;
+    private Integer tmId;
+    private Integer siteId;
+    @ManyToOne
+    private Tmdb tmdb;
+    private Instant time = Instant.now();
 }

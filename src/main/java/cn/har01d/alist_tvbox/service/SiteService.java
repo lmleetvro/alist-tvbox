@@ -81,6 +81,7 @@ public class SiteService {
             if (order == 1) {
                 aListToken = generateToken();
                 site.setToken(aListToken);
+                Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
             }
             site.setOrder(order++);
             siteRepository.save(site);
@@ -147,15 +148,6 @@ public class SiteService {
     }
 
     private void updateSite(Site site) {
-        if (site.getUrl().startsWith("http://localhost")) {
-            if (appProperties.isHostmode()) {
-                site.setUrl("http://localhost:6789");
-            } else {
-                site.setUrl("http://localhost");
-            }
-            log.info("set site url {}: {}", site.getName(), site.getUrl());
-        }
-
         try {
             if (StringUtils.isBlank(site.getToken())) {
                 aListToken = generateToken();
@@ -163,8 +155,8 @@ public class SiteService {
             } else {
                 aListToken = site.getToken();
             }
-            String sql = "UPDATE x_setting_items SET value='" + aListToken + "' WHERE key = 'token'";
-            Utils.executeUpdate(sql);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',1,0);");
+            Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -180,7 +172,11 @@ public class SiteService {
     public void resetToken() {
         String url = appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
         String token = postRestToken(url + "/api/admin/setting/reset_token");
-        log.info("{}", token);
+        log.info("new token {}", token);
+        if (StringUtils.isBlank(token)) {
+            token = generateToken();
+            Utils.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
+        }
         for (Site site : siteRepository.findAll()) {
             if (aListToken.equals(site.getToken())) {
                 site.setToken(token);
@@ -191,6 +187,9 @@ public class SiteService {
     }
 
     private String postRestToken(String url) {
+        if (StringUtils.isBlank(aListToken)) {
+            return null;
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", aListToken);
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
@@ -219,6 +218,9 @@ public class SiteService {
 
     public Site create(SiteDto dto) {
         validate(dto);
+        if (dto.getUrl().endsWith("/")) {
+            dto.setUrl(dto.getUrl().substring(0, dto.getUrl().length() - 1));
+        }
         if (siteRepository.existsByName(dto.getName())) {
             throw new BadRequestException("站点名字重复");
         }
@@ -242,11 +244,7 @@ public class SiteService {
         site.setVersion(dto.getVersion());
 
         if (StringUtils.isBlank(site.getUrl())) {
-            if (appProperties.isHostmode()) {
-                site.setUrl("http://localhost:6789");
-            } else {
-                site.setUrl("http://localhost");
-            }
+            site.setUrl("http://localhost");
             log.info("set site url: {} {}", site.getName(), site.getUrl());
         }
 
@@ -265,6 +263,9 @@ public class SiteService {
 
     public Site update(int id, SiteDto dto) {
         validate(dto);
+        if (dto.getUrl().endsWith("/")) {
+            dto.setUrl(dto.getUrl().substring(0, dto.getUrl().length() - 1));
+        }
         Site site = siteRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
         Optional<Site> other = siteRepository.findByName(dto.getName());
         if (other.isPresent() && other.get().getId() != id) {

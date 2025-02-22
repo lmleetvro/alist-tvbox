@@ -3,12 +3,13 @@
     <h1>订阅列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
+      <el-button @click="handleLogin">登陆电报</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </el-row>
     <div class="space"></div>
 
     <el-table :data="subscriptions" border style="width: 100%">
-<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
+      <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="原始配置URL" sortable>
@@ -41,6 +42,44 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <el-row>
+      猫影视配置接口：
+      <a
+        :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/open'+token"
+        target="_blank">
+        {{
+          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')
+        }}/open{{ token }}
+      </a>
+    </el-row>
+    <el-row>
+      猫影视node配置接口：
+      <a
+        :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/node'+(token ? token : '/-')+'/index.config.js'"
+        target="_blank">
+        {{
+          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')
+        }}/node{{ token ? token : '/-' }}/index.js.md5
+      </a>
+    </el-row>
+    <el-row>
+      PG包本地： {{ pgLocal }}
+      PG包远程： {{ pgRemote }}
+      <span class="hint"></span>
+      <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check /></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
+    </el-row>
+    <el-row>
+      真心包本地： {{ zxLocal }}
+      真心包远程： {{ zxRemote }}
+      <span class="hint"></span>
+      <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check /></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
+    </el-row>
+    <el-row>
+      <el-button @click="syncCat">同步文件</el-button>
+    </el-row>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
@@ -76,7 +115,8 @@
       </div>
       <h2>JSON数据</h2>
       <el-scrollbar height="800px">
-        <json-viewer :value="jsonData" expanded copyable :expand-depth=5></json-viewer>
+        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false"
+                     :expand-depth=5></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
@@ -96,15 +136,72 @@
       </span>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%" @close="cancelLogin">
+      <el-form>
+        <el-form-item label="登陆方式" label-width="140">
+          <el-radio-group v-model="tgAuthType" class="ml-4" @change="setAuthType">
+            <el-radio label="qr" size="large">二维码</el-radio>
+            <el-radio label="code" size="large">验证码</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <div v-if="tgAuthType=='qr'&&tgPhase==1&&base64QrCode!=''">
+          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
+          <p>二维码30秒内有效。</p>
+          <el-form-item>
+            <el-button type="primary" @click="setScanned">我已经扫码</el-button>
+          </el-form-item>
+        </div>
+        <el-form-item label="电话号码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==1">
+          <el-input v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
+          <el-button @click="sendTgPhone">输入</el-button>
+        </el-form-item>
+        <el-form-item label="验证码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==3">
+          <el-input v-model="tgCode" autocomplete="off"/>
+          <el-button @click="sendTgCode">输入</el-button>
+        </el-form-item>
+        <el-form-item label="密码" label-width="140" required v-if="tgPhase==5">
+          <el-input v-model="tgPassword" autocomplete="off"/>
+          <el-button @click="sendTgPassword">输入</el-button>
+        </el-form-item>
+        <div v-if="user.id">
+          <div>登陆成功</div>
+          <div>用户ID： {{ user.id }}</div>
+          <div>用户名： {{ user.username }}</div>
+          <div>姓名： {{ user.first_name }} {{ user.last_name }}</div>
+        </div>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button type="primary" @click="login">登陆</el-button>
+        <el-button type="danger" @click="logout">退出登陆</el-button>
+<!--        <el-button @click="reset">重置</el-button>-->
+        <el-button @click="cancelLogin">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import axios from "axios"
+import {ElMessage} from "element-plus";
+import {onUnmounted} from "@vue/runtime-core";
 
 const currentUrl = window.location.origin
+const tgPhase = ref(0)
+const tgPhone = ref('')
+const tgCode = ref('')
+const tgPassword = ref('')
+const tgAuthType = ref('qr')
+const base64QrCode = ref('')
 const token = ref('')
+const pgLocal = ref('')
+const pgRemote = ref('')
+const zxLocal = ref('')
+const zxRemote = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
@@ -112,6 +209,7 @@ const subscriptions = ref([])
 const detailVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const tgVisible = ref(false)
 const form = ref({
   id: 0,
   sid: '',
@@ -120,6 +218,76 @@ const form = ref({
   sort: '',
   override: ''
 })
+const user = ref({
+  id: 0,
+  username: '',
+  first_name: '',
+  last_name: '',
+  phone: ''
+})
+let timer = 0
+
+const handleLogin = () => {
+  axios.get('/api/telegram/user').then(({data}) => {
+    user.value = data
+  })
+  axios.get('/api/settings/tg_auth_type').then(({data}) => {
+    tgAuthType.value = data.value
+  })
+  tgVisible.value = true
+}
+
+const login = () => {
+  axios.post('/api/telegram/login')
+  timer = setInterval(() => {
+    axios.get('/api/settings/tg_phase').then(({data}) => {
+      tgPhase.value = +data.value
+      if (tgPhase.value > 8) {
+        clearInterval(timer)
+        axios.get('/api/telegram/user').then(({data}) => {
+          user.value = data
+        })
+      } else if (tgAuthType.value == 'qr' && tgPhase.value == 1 && base64QrCode.value == '') {
+        loadQrCode()
+      }
+    })
+  }, 1000)
+  setTimeout(() => {
+    clearInterval(timer)
+  }, 120_000)
+}
+
+const loadQrCode = () => {
+  axios.get('/api/settings/tg_qr_img').then(({data}) => {
+    base64QrCode.value = data.value
+  })
+}
+
+const cancelLogin = () => {
+  clearInterval(timer)
+  tgVisible.value = false
+}
+
+const reset = () => {
+  axios.post('/api/telegram/reset').then(() => {
+    ElMessage.success('重置成功')
+    clearInterval(timer)
+  })
+}
+
+const logout = () => {
+  axios.post('/api/telegram/logout').then(() => {
+    ElMessage.success('退出登陆成功')
+    clearInterval(timer)
+    user.value = {
+      id: 0,
+      username: '',
+      first_name: '',
+      last_name: '',
+      phone: ''
+    }
+  })
+}
 
 const handleAdd = () => {
   dialogTitle.value = '添加订阅'
@@ -174,10 +342,44 @@ const handleCancel = () => {
   formVisible.value = false
 }
 
+const setAuthType = () => {
+  base64QrCode.value = ''
+  axios.post('/api/settings', {name: 'tg_auth_type', value: tgAuthType.value})
+}
+
+const setScanned = () => {
+  axios.post('/api/settings', {name: 'tg_scanned', value: 'true'}).then(() => {
+    base64QrCode.value = ''
+  })
+}
+
+const sendTgPhone = () => {
+  axios.post('/api/settings', {name: 'tg_phone', value: tgPhone.value})
+}
+
+const sendTgCode = () => {
+  axios.post('/api/settings', {name: 'tg_code', value: tgCode.value})
+}
+
+const sendTgPassword = () => {
+  axios.post('/api/settings', {name: 'tg_password', value: tgPassword.value})
+}
+
 const handleConfirm = () => {
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
     load()
+  })
+}
+
+const syncCat = () => {
+  axios.post('/api/cat/sync').then(({data}) => {
+    if (data) {
+      ElMessage.warning('同步失败')
+    } else {
+      ElMessage.success('同步成功')
+      setTimeout(loadVersion, 1000)
+    }
   })
 }
 
@@ -187,17 +389,40 @@ const load = () => {
   })
 }
 
-onMounted(() => {
-  axios.get('/token').then(({data}) => {
-    token.value = data ? '/' + data : ''
-    load()
+const loadVersion = () => {
+  axios.get("/pg/version").then(({data}) => {
+    pgLocal.value = data.local
+    pgRemote.value = data.remote
   })
+  axios.get("/zx/version").then(({data}) => {
+    zxLocal.value = data.local
+    zxRemote.value = data.remote
+  })
+}
+
+onMounted(() => {
+  axios.get('/api/token').then(({data}) => {
+    token.value = data ? '/' + (data + '').split(',')[0] : ''
+    load()
+    loadVersion()
+    axios.get('/api/settings/tg_phase').then(({data}) => {
+      tgPhase.value = data.value
+    })
+  })
+})
+
+onUnmounted(() => {
+  clearInterval(timer)
 })
 </script>
 
 <style scoped>
 .space {
   margin-bottom: 6px;
+}
+
+.hint {
+  margin-left: 16px;
 }
 
 .json pre {

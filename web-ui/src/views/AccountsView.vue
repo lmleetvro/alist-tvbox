@@ -8,7 +8,7 @@
     <div class="space"></div>
 
     <el-table :data="accounts" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="70"/>
+<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
       <el-table-column prop="autoCheckin" label="自动签到" width="90">
         <template #default="scope">
@@ -20,7 +20,15 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="checkinDays" label="签到次数" width="90"/>
+      <el-table-column prop="checkinDays" label="签到次数" width="90">
+        <template #default="scope">
+          {{ scope.row.checkinDays }}
+          <span class="divider"></span>
+          <el-button link @click="loadTimeline(scope.row.id)">
+            <el-icon><Calendar /></el-icon>
+          </el-button>
+        </template>
+      </el-table-column>
       <el-table-column prop="checkinTime" label="上次签到时间">
         <template #default="scope">
           {{ formatTime(scope.row.checkinTime) }}
@@ -58,13 +66,16 @@
       <el-form :model="form">
         <el-form-item label="阿里refresh token" label-width="150" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
         </el-form-item>
         <el-form-item label="开放refresh token" label-width="140" required>
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+          AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          <div class="hint">
+            webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
+          </div>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -127,13 +138,16 @@
         </el-form-item>
         <el-form-item prop="refreshToken" label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
           <span class="hint">更新时间： {{ formatTime(form.refreshTokenTime) }}</span>
         </el-form-item>
         <el-form-item prop="openToken" label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+          AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          <div class="hint">
+            webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
+          </div>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
           <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>
@@ -189,9 +203,32 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="timelineVisible" title="签到日志" width="60%">
+      <el-timeline>
+        <el-timeline-item
+          v-for="(activity, index) in activities"
+          :key="index"
+          :type="activity.status!='end'?'primary':''"
+          :hollow="activity.status!='verification'"
+          :timestamp="activity.date"
+        >
+          {{ activity.name }}
+        </el-timeline-item>
+      </el-timeline>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="timelineVisible = false">关闭</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <div class="divider"></div>
 
     <PikPakView></PikPakView>
+
+    <div class="divider"></div>
+
+    <pan-account-view></pan-account-view>
   </div>
 </template>
 
@@ -203,9 +240,11 @@ import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import router from "@/router";
 import PikPakView from '@/views/PikPakView.vue'
+import PanAccountView from "@/views/PanAccountView.vue";
 
 const iat = ref([0])
 const exp = ref([0])
+const activities = ref<any[]>([])
 const forceCheckin = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -214,6 +253,7 @@ const formVisible = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const alistVisible = ref(false)
+const timelineVisible = ref(false)
 const form = ref({
   id: 0,
   nickname: '',
@@ -336,6 +376,13 @@ const restartAList = () => {
     alistVisible.value = false
     ElMessage.success('AList重启中')
     setTimeout(() => router.push('/wait'), 1000)
+  })
+}
+
+const loadTimeline = (id: number) => {
+  axios.get('/api/ali/accounts/' + id + '/checkin').then(({data}) => {
+    activities.value = data
+    timelineVisible.value = true
   })
 }
 

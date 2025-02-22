@@ -1,19 +1,22 @@
 <template>
   <div class="files">
-    <h1>电影数据列表</h1>
+    <h1>豆瓣电影数据列表</h1>
+    <a href="/#/tmdb">TMDB电影数据列表</a>
     <el-row justify="end">
       <el-input v-model="keyword" @change="search" class="search" autocomplete="off"/>
       <el-button type="primary" @click="search" :disabled="!keyword">
         搜索
       </el-button>
-      <el-button @click="scrapeVisible=true">刮削</el-button>
+      <el-button @click="scrapeVisible=true" v-if="showScrape">刮削</el-button>
       <el-button @click="fixMeta">去重</el-button>
       <el-button @click="refresh">刷新</el-button>
-      <el-button type="primary" @click="addMeta">添加</el-button>
+      <el-button type="primary" @click="addMeta" v-if="showScrape">添加</el-button>
+      <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="files" border style="width: 100%">
+    <el-table :data="files" border @selection-change="handleSelectionChange" style="width: 100%">
+      <el-table-column type="selection" width="55"/>
       <el-table-column prop="id" label="ID" width="75"/>
       <el-table-column prop="name" label="电影名称" width="250"/>
       <el-table-column prop="movieId" label="豆瓣ID" width="100">
@@ -23,15 +26,24 @@
           </a>
         </template>
       </el-table-column>
+      <el-table-column prop="tmId" label="TMDB ID" width="100">
+        <template #default="scope">
+          <a v-if="scope.row.tmId" :href="'https://www.themoviedb.org/' + scope.row.type + '/' + scope.row.tmId"
+             target="_blank">
+            {{ scope.row.tmId }}
+          </a>
+        </template>
+      </el-table-column>
       <el-table-column prop="path" label="路径">
         <template #default="scope">
-          <a :href="url + scope.row.path" target="_blank">
+          <a :href="getUrl(scope.row)" target="_blank">
             {{ scope.row.path }}
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="year" label="年份" width="100"/>
-      <el-table-column prop="score" label="评分" width="100"/>
+      <el-table-column prop="year" label="年份" width="65"/>
+      <el-table-column prop="score" label="评分" width="60"/>
+<!--      <el-table-column prop="time" label="更新时间" width="100"/>-->
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="editMeta(scope.row)">编辑</el-button>
@@ -40,20 +52,25 @@
       </el-table-column>
     </el-table>
     <div>
-      <el-pagination layout="total, prev, pager, next, jumper" :current-page="page" :page-size="size" :total="total"
-                     @current-change="load"/>
+      <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" @current-change="load"
+                     :page-size="size" :page-sizes="sizes" :total="total" @size-change="handleSizeChange"/>
     </div>
 
     <el-dialog v-model="formVisible" :title="'编辑 '+form.id" width="60%">
       <el-form label-width="140px">
+        <el-form-item label="站点" required>
+          <el-select v-model="form.siteId">
+            <el-option :label="site.name" :value="site.id" v-for="site of sites"/>
+          </el-select>
+        </el-form-item>
         <el-form-item label="路径" required>
           <el-input v-model="form.path" autocomplete="off" readonly/>
         </el-form-item>
         <el-form-item label="豆瓣ID" required>
-          <el-input-number v-model="form.movieId" autocomplete="off"/>
+          <el-input-number v-model="form.movieId" min="0" autocomplete="off"/>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateMeta">更新</el-button>
+          <el-button type="primary" :disabled="!form.movieId" @click="updateMeta">更新</el-button>
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="form.name" autocomplete="off"/>
@@ -68,7 +85,7 @@
       </el-form>
       <template #footer>
       <span class="dialog-footer">
-        <el-button type="danger" size="small" @click="dialogVisible=true">删除</el-button>
+        <el-button type="danger" @click="dialogVisible=true">删除</el-button>
         <el-button @click="formVisible=false">取消</el-button>
       </span>
       </template>
@@ -80,7 +97,7 @@
           <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="豆瓣ID" required>
-          <el-input-number v-model="form.movieId" autocomplete="off"/>
+          <el-input-number v-model="form.movieId" min="0" autocomplete="off"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -92,8 +109,13 @@
     </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="删除电影数据" width="30%">
-      <p>是否删除电影数据 - {{ form.name }}</p>
-      <p>{{ form.path }}</p>
+      <div v-if="batch">
+        <p>是否删除选中的{{ multipleSelection.length }}个电影数据?</p>
+      </div>
+      <div v-else>
+        <p>是否删除电影数据 - {{ form.name }} {{ form.year }}</p>
+        <p>{{ form.path }}</p>
+      </div>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -129,8 +151,10 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import type {Site} from "@/model/Site";
+import type {Meta} from "@/model/Meta";
 
-const url = ref('http://' + window.location.hostname + ':5344')
+const sizes = [20, 40, 60, 80, 100]
+const url = ref(window.location.protocol + '//' + window.location.hostname + ':' + (store.hostmode ? 5678 : 5344))
 const keyword = ref('')
 const force = ref(false)
 const siteId = ref(1)
@@ -139,11 +163,14 @@ const size = ref(20)
 const total = ref(0)
 const files = ref([])
 const sites = ref([] as Site[])
+const multipleSelection = ref<Meta[]>([])
 const dialogVisible = ref(false)
 const formVisible = ref(false)
 const addVisible = ref(false)
 const scrapeVisible = ref(false)
+const showScrape = ref(false)
 const fullscreen = ref(false)
+const batch = ref(false)
 const form = ref({
   id: 0,
   name: '',
@@ -151,19 +178,39 @@ const form = ref({
   year: 0,
   score: 0,
   movieId: 0,
+  siteId: 1,
 })
 
-const handleDelete = (data: any) => {
+const handleSelectionChange = (val: Meta[]) => {
+  multipleSelection.value = val
+}
+
+const handleDelete = (data: Meta) => {
   form.value = data
+  batch.value = false
+  dialogVisible.value = true
+}
+
+const handleDeleteBatch = () => {
+  batch.value = true
   dialogVisible.value = true
 }
 
 const deleteSub = () => {
-  axios.delete('/api/meta/' + form.value.id).then(() => {
-    dialogVisible.value = false
-    scrapeVisible.value = false
-    refresh()
-  })
+  dialogVisible.value = false
+  if (batch.value) {
+    axios.post('/api/meta-batch-delete', multipleSelection.value.map(s => s.id)).then(() => {
+      dialogVisible.value = false
+      scrapeVisible.value = false
+      refresh()
+    })
+  } else {
+    axios.delete('/api/meta/' + form.value.id).then(() => {
+      dialogVisible.value = false
+      scrapeVisible.value = false
+      refresh()
+    })
+  }
 }
 
 const search = () => {
@@ -180,6 +227,18 @@ const fixMeta = () => {
   })
 }
 
+const getUrl = (meta: Meta) => {
+  const site = sites.value.find(e => e.id == meta.siteId)
+  if (site && site.url !== 'http://localhost') {
+    let surl = site.url
+    if (surl.endsWith('/')) {
+      surl = surl.substring(0, surl.length - 1)
+    }
+    return surl + meta.path
+  }
+  return url.value + meta.path
+}
+
 const addMeta = () => {
   form.value = {
     id: 0,
@@ -188,6 +247,7 @@ const addMeta = () => {
     year: 0,
     score: 0,
     movieId: 0,
+    siteId: 1,
   }
   addVisible.value = true
 }
@@ -206,12 +266,12 @@ const saveMeta = () => {
 }
 
 const editMeta = (data: any) => {
-  form.value = Object.assign({}, data)
+  form.value = Object.assign({siteId: 1}, data)
   formVisible.value = true
 }
 
 const updateMeta = () => {
-  axios.post('/api/meta/' + form.value.id + '/movie?movieId=' + form.value.movieId).then(({data}) => {
+  axios.post('/api/meta/' + form.value.id, form.value).then(({data}) => {
     if (data) {
       ElMessage.success('更新成功')
       formVisible.value = false
@@ -241,6 +301,11 @@ const scrapeIndex = () => {
   })
 }
 
+const handleSizeChange = (value: number) => {
+  size.value = value
+  load(1)
+}
+
 const load = (value: number) => {
   page.value = value
   axios.get('/api/meta?page=' + (page.value - 1) + '&size=' + size.value + '&q=' + keyword.value).then(({data}) => {
@@ -264,24 +329,26 @@ const loadBaseUrl = () => {
     return
   }
 
-  if (store.xiaoya) {
-    axios.get('/api/sites/1').then(({data}) => {
-      const re = /http:\/\/localhost:(\d+)/.exec(data.url)
-      if (re) {
-        url.value = 'http://' + window.location.hostname + ':' + re[1]
-      } else if (data.url == 'http://localhost') {
-        axios.get('/api/alist/port').then(({data}) => {
-          if (data) {
-            url.value = 'http://' + window.location.hostname + ':' + data
-          }
-        })
-      } else {
-        url.value = data.url
-      }
+  axios.get('/api/sites/1').then(({data}) => {
+    url.value = data.url
+    const re = /http:\/\/localhost:(\d+)/.exec(data.url)
+    if (re) {
+      url.value = window.location.protocol + '//' + window.location.hostname + ':' + re[1]
       store.baseUrl = url.value
       console.log('load AList ' + url.value)
-    })
-  }
+    } else if (data.url == 'http://localhost') {
+      axios.get('/api/alist/port').then(({data}) => {
+        if (data) {
+          url.value = window.location.protocol + '//' + window.location.hostname + ':' + data
+          store.baseUrl = url.value
+          console.log('load AList ' + url.value)
+        }
+      })
+    } else {
+      store.baseUrl = url.value
+      console.log('load AList ' + url.value)
+    }
+  })
 }
 
 onMounted(() => {

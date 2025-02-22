@@ -11,7 +11,7 @@ public class MovieDetail {
     private String vod_pic;
     private String vod_tag;
     private String vod_time;
-    private String vod_remarks;
+    private String vod_remarks = "";
     private String vod_play_from;
     private String vod_play_url;
     private String type_name;
@@ -21,7 +21,8 @@ public class MovieDetail {
     private String vod_director;
     private String vod_lang;
     private String vod_year;
-    private long size;
+    private Long size;
+    private CategoryList cate;
 
     @Override
     public boolean equals(Object o) {

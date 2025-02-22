@@ -13,31 +13,44 @@
     </p>
     <p>
       AList：
-      <a href="https://alist.nn.ci/" target="_blank">https://alist.nn.ci/</a>
+      <a href="https://alist.nn.ci/zh/guide/" target="_blank">https://alist.nn.ci/</a>
     </p>
     <p>
       Docker：
       <a href="https://hub.docker.com/r/haroldli/xiaoya-tvbox" target="_blank">https://hub.docker.com/r/haroldli/xiaoya-tvbox</a>
     </p>
     <p>
+      Telegram：
+      <a href="https://t.me/alist_tvbox_group" target="_blank">https://t.me/alist_tvbox_group</a>
+    </p>
+    <p>
       使用方式：
       <code>docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox</code>
     </p>
     <p>
+      一键部署(纯净版|独立版)：
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"</code><br>
+    </p>
+    <p>
       一键部署(小雅版)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"</code><br>
     </p>
     <p>
       一键部署(内存优化版)：
-      <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t native</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native_host.sh)"</code><br>
+    </p>
+    <p>
+      一键部署(host网络模式)：
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"</code><br>
     </p>
     <p>
       一键部署(开发版)：
-      <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
+      <code>wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
     </p>
     <p>
       一键部署(NAS)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>
     </p>
   </div>
 </template>

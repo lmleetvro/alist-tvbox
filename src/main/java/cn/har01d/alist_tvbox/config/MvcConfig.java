@@ -9,9 +9,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class MvcConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry
-                .addResourceHandler("/tvbox/**")
-                .addResourceLocations("file:/www/tvbox/");
+        registry.addResourceHandler("/cat/**").addResourceLocations("file:/www/cat/");
+        registry.addResourceHandler("/tvbox/**").addResourceLocations("file:/www/tvbox/");
+        registry.addResourceHandler("/files/**").addResourceLocations("file:/www/files/");
+        registry.addResourceHandler("/pg/**").addResourceLocations("file:/www/pg/");
+        registry.addResourceHandler("/zx/**").addResourceLocations("file:/www/zx/");
     }
 
     @Override

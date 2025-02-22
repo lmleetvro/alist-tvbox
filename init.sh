@@ -1,10 +1,35 @@
 #!/bin/sh
 
+update_movie() {
+  LOCAL="0.0"
+  if [ -f /data/atv/base_version ]; then
+    LOCAL=$(head -n 1 </data/atv/base_version)
+  fi
+  REMOTE=$(head -n 1 </base_version)
+  echo "movie base version: $LOCAL $REMOTE"
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "upgrade movie data"
+    unzip -q -o /data.zip -d /data/atv/
+    cp /base_version /tmp/
+    rm -f /data/atv/sql/*.sql
+  fi
+}
+
+restore_database() {
+  if [ -f "/data/database.zip" ]; then
+    echo "=== restore database ==="
+    rm -f /data/atv.mv.db /data/atv.trace.db
+    java -cp /opt/atv/BOOT-INF/lib/h2-*.jar org.h2.tools.RunScript -url jdbc:h2:/data/atv -user sa -password password -script /data/database.zip -options compression zip
+    rm -f /data/database.zip /data/atv/base_version /data/atv/movie_version
+  fi
+}
+
 init() {
   mkdir -p /var/lib/pxg /www/cgi-bin /index /data/atv /data/index /data/backup
   if [ -d /index ]; then
     rm -rf /index
   fi
+  [ -h /data/log/log ] && unlink /data/log/log
   ln -sf /data/index /
   ln -sf /data/config .
   cd /var/lib/pxg
@@ -15,9 +40,8 @@ init() {
   mv sou /www/cgi-bin/sou
   mv whatsnew /www/cgi-bin/whatsnew
   mv header.html /www/cgi-bin/header.html
-  mv emby.conf /etc/nginx/http.d/emby.conf
-  mv emby.js /etc/nginx/http.d/emby.js
 
+  sed -i "s/127.0.0.1/0.0.0.0/" /opt/alist/data/config.json
   sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 
   mv mobi.tgz /www/mobi.tgz
@@ -27,8 +51,9 @@ init() {
 
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
-  wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip || \
-  wget -T 30 -t 2 http://data.har01d.cn/tvbox.zip -O tvbox.zip
+  wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
+  wget -T 30 -t 2 http://har01d.org/tvbox.zip -O tvbox.zip || \
+  cp /tvbox.zip ./
 
   unzip -q -o tvbox.zip
   if [ -f /data/my.json ]; then
@@ -41,44 +66,54 @@ init() {
   fi
 
   rm -f tvbox.zip index.zip index.txt version.txt update.zip
+
+  update_movie
 }
 
+echo "Install mode: $INSTALL"
 cat data/app_version
 version=$(head -n1 /docker.version)
 echo "xiaoya version: $version"
+uname -mor
 date
 
-if [ ! -f /etc/nginx/http.d/emby.js ]; then
-  unzip -q /var/lib/data.zip -d /tmp
-  mv /tmp/emby.conf /etc/nginx/http.d/emby.conf
-  mv /tmp/emby.js /etc/nginx/http.d/emby.js
-fi
-
+restore_database
 if [ -f /opt/alist/data/data.db ]; then
+  update_movie
   echo "已经初始化成功"
 else
   init
 fi
 
+if [ ! -d /www/cat ]; then
+  echo "unzip cat.zip"
+  mkdir /www/cat
+  unzip -q -o /cat.zip -d /www/cat
+fi
+[ -d /data/cat ] && cp -r /data/cat/* /www/cat/
+
+[ ! -f /data/pg.zip ] && cp /pg.zip /data/pg.zip
+if [ ! -d /www/pg ]; then
+  echo "unzip pg.zip"
+  mkdir /www/pg
+  unzip -q -o /data/pg.zip -d /www/pg
+fi
+[ -d /data/pg ] && cp -r /data/pg/* /www/pg/
+
+[ ! -f /data/zx.zip ] && cp /zx.zip /data/zx.zip
+if [ ! -d /www/zx ]; then
+  echo "unzip zx.zip"
+  mkdir /www/zx
+  unzip -q -o /data/zx.zip -d /www/zx
+fi
+
 cd /tmp/
 
-if [ -s /data/emby_server.txt ]; then
-	emby_server=$(head -n1 /data/emby_server.txt)
-	_docker_address=$(head -n1 /data/docker_address.txt)
-	sed -i "s#EMBY_SERVER#$emby_server#" /etc/nginx/http.d/emby.conf
-	sed -i -e "s#EMBY_SERVER#$emby_server#" -e "s#_DOCKER_ADDRESS#$_docker_address#" /etc/nginx/http.d/emby.js
-fi
+wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
+wget -T 10 -t 2 http://har01d.org/version.txt -O version.txt
 
-if [ -s /data/infuse_api_key.txt ]; then
-	infuse_api_key=$(head -n1 /data/infuse_api_key.txt)
-	sed -i "s#INFUSE_API_KEY#$infuse_api_key#" /etc/nginx/http.d/emby.js
-fi
-
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt || \
-wget -T 10 -t 2 http://data.har01d.cn/version.txt -O version.txt
-
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/update.zip || \
-wget -T 30 -t 2 http://data.har01d.cn/update.zip -O update.zip
+wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
+wget -T 30 -t 2 http://har01d.org/update.zip -O update.zip
 
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
@@ -95,6 +130,7 @@ else
   fi
 
   sed -i 's/v3.9.2/v3.25.1/' update.sql
+  sed -i 's/pass_code/share_pwd/' update.sql
 
   sqlite3 /opt/alist/data/data.db <<EOF
 drop table x_storages;
@@ -122,8 +158,8 @@ else
   if [ "$remote" = "$local" ]; then
     echo "$(date) current index file version is updated, no need to upgrade"
   elif [ "$remote" = "$latest" ]; then
-    wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/index.zip || \
-    wget -T 40 -t 2 http://data.har01d.cn/index.zip -O index.zip
+    wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
+    wget -T 40 -t 2 http://har01d.org/index.zip -O index.zip
 
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
@@ -145,39 +181,23 @@ LOCAL="0.0"
 if [ -f /data/index/share_version ]; then
   LOCAL=$(head -n 1 </data/index/share_version)
 fi
-REMOTE=$(curl -fsSL http://data.har01d.cn/share_version | head -n 1)
+unzip -q -o /index.share.zip -d /tmp
+REMOTE=$(head -n 1 </tmp/share_version)
 echo "share index version: $LOCAL $REMOTE"
 if [ "$LOCAL" != "$REMOTE" ]; then
-  echo "Download index.share.zip"
-  wget http://data.har01d.cn/index.share.zip -O index.share.zip && \
-  unzip -q -o index.share.zip -d /data/index/ && \
-  rm -f index.share.zip
+  echo "upgrade share index"
+  mv /tmp/index.share.txt /data/index/index.share.txt
+  mv /tmp/share_version /data/index/share_version
   grep -v "/🈴我的阿里分享/" /data/index/index.video.txt >/data/index/index.video.txt.1
   grep -v "/🈴我的阿里分享/" /data/index/index.txt >/data/index/index.txt.1
-  grep -v "/🌞我的夸克网盘/Harold/" /data/index/index.video.txt >/data/index/index.video.txt.1
-  grep -v "/🌞我的夸克网盘/Harold/" /data/index/index.txt >/data/index/index.txt.1
   mv /data/index/index.video.txt.1 /data/index/index.video.txt
   mv /data/index/index.txt.1 /data/index/index.txt
   cat /data/index/index.share.txt >> /data/index/index.video.txt
   cat /data/index/index.share.txt >> /data/index/index.txt
 fi
-
-#wget http://data.har01d.cn/cat_open.zip -O cat_open.zip && \
-#unzip cat_open.zip -d /www/tvbox/
+rm -f /tmp/index.share.txt
 
 app_ver=$(head -n1 /opt/atv/data/app_version)
 sqlite3 /opt/alist/data/data.db <<EOF
 INSERT INTO x_storages VALUES(20000,'/©️ $version-$app_ver',0,'Alias',30,'work','{"paths":"/每日更新"}','','2022-11-12 13:05:12+00:00',0,'','','',0,'302_redirect','');
 EOF
-
-LOCAL="0.0"
-if [ -f /data/atv/base_version ]; then
-  LOCAL=$(head -n 1 </data/atv/base_version)
-fi
-REMOTE=$(curl -fsSL http://data.har01d.cn/base_version | head -n 1)
-echo "movie base version: $LOCAL $REMOTE"
-if [ "$LOCAL" != "$REMOTE" ]; then
-  wget http://data.har01d.cn/data.zip -O data.zip && \
-  unzip -q -o data.zip -d /tmp && \
-  cp /tmp/data/data.sql /data/atv/
-fi

@@ -52,21 +52,18 @@ fi
 
 [ -d data ] || mkdir data
 export TZ=Asia/Shanghai
-num1=$(date +%Y)
-num2=$(date +%j)
-sum=$((($num1 - 2023) * 366 + $num2))
-echo $sum.$(date +%H%M) > data/version
+echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
-echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80  $PORT3:2345"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
 docker pull xiaoyaliu/alist:latest
 
 docker image prune -f
-date +%j.%H%M > data/version
+echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
 docker build -f Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:80 -p $PORT3:2345 -e ALIST_PORT=$PORT2 -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e INSTALL=native -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
 
 sleep 1
 

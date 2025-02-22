@@ -35,13 +35,13 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -51,6 +51,7 @@ import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +75,7 @@ public class DoubanService {
     private static final Pattern NUMBER3 = Pattern.compile("^S(\\d{1,2})$");
     private static final Pattern NUMBER1 = Pattern.compile("第(\\d{1,2})季");
     private static final Pattern YEAR_PATTERN = Pattern.compile("\\((\\d{4})\\)");
+    private static final Pattern YEAR2_PATTERN = Pattern.compile("(\\d{4})");
     private static final String DB_PREFIX = "https://movie.douban.com/subject/";
     private static final String[] tokens = new String[]{"导演:", "编剧:", "主演:", "类型:", "制片国家/地区:", "语言:", "上映日期:",
             "片长:", "又名:", "IMDb链接:", "官方网站:", "官方小站:", "首播:", "季数:", "集数:", "单集片长:"};
@@ -88,6 +90,7 @@ public class DoubanService {
 
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
+    private final Environment environment;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final OkHttpClient client = new OkHttpClient();
 
@@ -101,7 +104,8 @@ public class DoubanService {
                          SiteService siteService,
                          TaskService taskService,
                          RestTemplateBuilder builder,
-                         JdbcTemplate jdbcTemplate) {
+                         JdbcTemplate jdbcTemplate,
+                         Environment environment) {
         this.appProperties = appProperties;
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
@@ -114,6 +118,7 @@ public class DoubanService {
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
                 .build();
         this.jdbcTemplate = jdbcTemplate;
+        this.environment = environment;
     }
 
     @PostConstruct
@@ -131,14 +136,21 @@ public class DoubanService {
         }
 
         if (metaRepository.count() > 10000) {
-            Path source = Path.of("/tmp/data/base_version");
+            Path source = Path.of("/tmp/base_version");
             if (Files.exists(source)) {
                 try {
-                    Utils.execute("mv /tmp/data/base_version /data/atv/base_version");
+                    settingRepository.save(new Setting(MOVIE_VERSION, Files.readString(source).trim()));
                 } catch (Exception e) {
                     log.warn("", e);
                 }
 
+                try {
+                    Files.delete(source);
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
+
+                log.debug("reset data.sql");
                 writeText("/data/atv/data.sql", "SELECT COUNT(*) FROM META;");
             }
         }
@@ -194,15 +206,18 @@ public class DoubanService {
         return list.size();
     }
 
-    @Scheduled(cron = "0 0 22 * * ?")
+    @Scheduled(cron = "0 0 20,22 * * ?")
     public void update() {
-        Versions versions = new Versions();
-        getRemoteVersion(versions);
+        getRemoteVersion(new Versions());
     }
 
     public String getRemoteVersion(Versions versions) {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return "";
+        }
+
         try {
-            String remote = restTemplate.getForObject("http://data.har01d.cn/movie_version", String.class).trim();
+            String remote = restTemplate.getForObject("http://har01d.org/movie_version", String.class).trim();
             versions.setMovie(remote);
             String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("0.0").trim();
             String cached = getCachedVersion();
@@ -210,10 +225,12 @@ public class DoubanService {
             if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
                 log.info("local: {} cached: {} remote: {}", local, cached, remote);
                 executor.execute(() -> upgradeMovieData(local, remote));
+            } else {
+                log.debug("local: {} cached: {} remote: {}", local, cached, remote);
             }
             return remote;
         } catch (Exception e) {
-            log.warn("", e);
+            log.debug("", e);
         }
         return "";
     }
@@ -340,7 +357,7 @@ public class DoubanService {
         if (movie != null) {
             if (movie.getCover() != null && !movie.getCover().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
+                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                         .replacePath("/images")
                         .query("url=" + movie.getCover())
                         .build()
@@ -357,9 +374,15 @@ public class DoubanService {
 
     public Movie getByName(String name) {
         try {
+            Alias alias = aliasRepository.findById(name).orElse(null);
+            if (alias != null) {
+                log.debug("name: {} alias: {}", name, alias.getAlias());
+                return alias.getMovie();
+            }
+
             name = TextUtils.fixName(name);
 
-            Alias alias = aliasRepository.findById(name).orElse(null);
+            alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {
                 log.debug("name: {} alias: {}", name, alias.getAlias());
                 return alias.getMovie();
@@ -392,15 +415,15 @@ public class DoubanService {
         return null;
     }
 
-    public boolean updateMetaMovie(@PathVariable Integer id, Integer movieId) {
-        if (movieId == null || movieId < 100000) {
+    public boolean updateMetaMovie(Integer id, MetaDto dto) {
+        if (dto.getMovieId() == null || dto.getMovieId() < 100000) {
             throw new BadRequestException("电影ID不正确");
         }
         var meta = metaRepository.findById(id).orElse(null);
         if (meta == null) {
             return false;
         }
-        Movie movie = getById(movieId);
+        Movie movie = getById(dto.getMovieId());
         if (movie != null) {
             meta.setMovie(movie);
             meta.setYear(movie.getYear());
@@ -408,18 +431,19 @@ public class DoubanService {
             if (StringUtils.isNotBlank(movie.getDbScore())) {
                 meta.setScore((int) (Double.parseDouble(movie.getDbScore()) * 10));
             }
+            meta.setSiteId(dto.getSiteId());
             metaRepository.save(meta);
             return true;
         }
         return false;
     }
 
-    public boolean scrape(@PathVariable Integer id, String name) {
+    public boolean scrape(Integer id, String name) {
         var meta = metaRepository.findById(id).orElse(null);
         if (meta == null) {
             return false;
         }
-        Movie movie = scrape(name);
+        Movie movie = scrape(name, getYearFromPath(meta.getPath()));
         if (movie != null) {
             meta.setMovie(movie);
             meta.setYear(movie.getYear());
@@ -604,7 +628,7 @@ public class DoubanService {
 
             try {
                 log.info("[{}] handle name: {} - path: {}", id, newname, path);
-                movie = search(newname);
+                movie = search(newname, getYearFromPath(path));
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {
@@ -730,20 +754,42 @@ public class DoubanService {
         return path;
     }
 
-    public Movie scrape(String name) {
+    public Integer getYearFromPath(String path) {
+        int max = LocalDate.now().getYear() + 3;
+        String[] parts = path.split("/");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            Matcher m = YEAR2_PATTERN.matcher(parts[i]);
+            while (m.find()) {
+                int year = Integer.parseInt(m.group(1));
+                if (year > 1960 && year < max) {
+                    log.debug("find year {} from path {}", year, path);
+                    return year;
+                }
+            }
+        }
+        return null;
+    }
+
+    public Movie scrape(String name, Integer year) {
         try {
-            log.info("刮削: {}", name);
-            return search(name);
+            log.info("刮削: {} {}", name, year);
+            return search(name, year);
         } catch (IOException e) {
             return null;
         }
     }
 
-    private Movie search(String text) throws IOException {
+    private Movie search(String text, Integer year) throws IOException {
         if (text.trim().isEmpty()) {
             return null;
         }
-        String url = "https://m.douban.com/search/?type=movie&query=" + URLEncoder.encode(text, "UTF-8");
+        String query;
+        if (year != null) {
+            query = text + " " + year;
+        } else {
+            query = text;
+        }
+        String url = "https://m.douban.com/search/?type=movie&query=" + URLEncoder.encode(query, "UTF-8");
 
         String html = getHtml(url);
 
@@ -829,6 +875,7 @@ public class DoubanService {
         if (meta == null) {
             meta = new Meta();
             meta.setPath(path);
+            meta.setSiteId(dto.getSiteId());
         }
         Movie movie = getById(dto.getMovieId());
         if (movie != null) {

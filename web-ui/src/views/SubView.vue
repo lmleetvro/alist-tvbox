@@ -7,7 +7,7 @@
 
     <h2>API返回数据</h2>
     <div class="data" v-loading="loading">
-      <json-viewer :value="config" expanded copyable :expand-depth=5></json-viewer>
+      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=5></json-viewer>
     </div>
   </div>
 </template>
@@ -43,8 +43,8 @@ watch(
 )
 
 onMounted(async () => {
-  token.value = await axios.get('/token').then(({data}) => {
-    return  data ? '/' + data : ''
+  token.value = await axios.get('/api/token').then(({data}) => {
+    return  data ? '/' + (data + '').split(',')[0] : ''
   })
   id.value = route.params.id as string
   config.value = await load(id.value)

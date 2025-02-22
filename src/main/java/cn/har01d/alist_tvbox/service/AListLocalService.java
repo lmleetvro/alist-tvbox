@@ -12,8 +12,10 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -34,22 +36,40 @@ public class AListLocalService {
 
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
+    private final AppProperties appProperties;
     private final RestTemplate restTemplate;
+    private final Environment environment;
 
     private volatile int aListStatus;
 
-    public AListLocalService(SettingRepository settingRepository, SiteRepository siteRepository, AppProperties appProperties, RestTemplateBuilder builder) {
+    public AListLocalService(SettingRepository settingRepository, SiteRepository siteRepository, AppProperties appProperties, RestTemplateBuilder builder, Environment environment) {
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
+        this.appProperties = appProperties;
+        this.environment = environment;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
     }
 
     @PostConstruct
     public void setup() {
+        String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('external_port','" + port + "','','number','',1,0);");
         String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
+        String clientId = settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_id','" + clientId + "','','string','',1,0);");
+        String clientSecret = settingRepository.findById("open_api_client_secret").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_secret','" + clientSecret + "','','string','',1,0);");
         String token = settingRepository.findById("token").map(Setting::getValue).orElse("");
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
+        String code = settingRepository.findById("delete_code_115").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_code_115','" + code + "','','string','',1,0);");
+        String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_delay_time','" + time + "','','number','',1,0)");
+        String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_to_115','" + aliTo115 + "','','bool','',1,0)");
+//        String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("false");
+//        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_lazy_load','" + lazy + "','','bool','',1,0)");
     }
 
     public void updateSetting(String key, String value, String type) {
@@ -75,6 +95,16 @@ public class AListLocalService {
         }
     }
 
+    public SettingResponse getSetting(String key) {
+        HttpHeaders headers = new HttpHeaders();
+        Site site = siteRepository.findById(1).orElseThrow();
+        headers.add("Authorization", site.getToken());
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
+        String url = "/api/admin/setting/get?key=" + key;
+        ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
+        return response.getBody();
+    }
+
     public void startAListServer() {
         if (aListStatus > 0) {
             return;
@@ -86,7 +116,12 @@ public class AListLocalService {
             File outFile = new File("/opt/atv/log/app.log");
             builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
             builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
-            builder.command("/opt/alist/alist", "server", "--no-prefix");
+            boolean debug = settingRepository.findById("alist_debug").map(Setting::getValue).orElse("").equals("true");
+            if (debug) {
+                builder.command("/opt/alist/alist", "server", "--no-prefix", "--debug");
+            } else {
+                builder.command("/opt/alist/alist", "server", "--no-prefix");
+            }
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
             settingRepository.save(new Setting(ALIST_RESTART_REQUIRED, "false"));

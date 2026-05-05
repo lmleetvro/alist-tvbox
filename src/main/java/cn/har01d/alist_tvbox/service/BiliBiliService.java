@@ -564,7 +564,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getBadge());
         movieDetail.setVod_pic(fixCover(info.getCover()));
-        movieDetail.setVod_remarks(info.getRating());
+        movieDetail.setVod_remarks(StringUtils.isBlank(info.getRating()) ? info.getBadge() : info.getBadge() + " - " + info.getRating());
         return movieDetail;
     }
 
@@ -575,7 +575,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getBadge());
         movieDetail.setVod_pic(fixCover(info.getCover()));
-        movieDetail.setVod_remarks(info.getRating() == null ? "" : String.valueOf(info.getRating().getScore()));
+        movieDetail.setVod_remarks(info.getRating() == null ? info.getBadge() : info.getBadge() + " - " + info.getRating().getScore());
         return movieDetail;
     }
 

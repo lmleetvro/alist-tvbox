@@ -641,10 +641,10 @@ public class BiliBiliService {
     }
 
     private MovieDetail getMovieDetail(BiliBiliInfo info) {
-        return getMovieDetail(info, false);
+        return getMovieDetail(info, "", false);
     }
 
-    private MovieDetail getMovieDetail(BiliBiliInfo info, boolean full) {
+    private MovieDetail getMovieDetail(BiliBiliInfo info, String client, boolean full) {
         String id = info.getBvid();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(id);
@@ -657,9 +657,13 @@ public class BiliBiliService {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
             if (info.getPages() == null || info.getPages().size() <= 1) {
-                movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
+                if ("gui".equals(client)) {
+                    movieDetail.setVod_play_url("视频(" + seconds2String(info.getDuration()) + ")$" + buildPlayUrl(id));
+                } else {
+                    movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
+                }
             } else {
-                movieDetail.setVod_play_url(info.getPages().stream().map(e -> fixTitle(e.getPart()) + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
+                movieDetail.setVod_play_url(info.getPages().stream().map(e -> buildTitle(e, client) + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
             }
             if (info.getOwner() != null) {
                 movieDetail.setVod_director(info.getOwner().getName());
@@ -685,6 +689,14 @@ public class BiliBiliService {
         }
 
         return movieDetail;
+    }
+
+    private String buildTitle(BiliBiliInfo.PageInfo info, String client) {
+        String title = fixTitle(info.getPart());
+        if ("gui".equals(client)) {
+            title += "(" + seconds2String(info.getDuration()) + ")";
+        }
+        return title;
     }
 
     private String playCount(String view) {
@@ -1604,7 +1616,7 @@ public class BiliBiliService {
         }
 
         BiliBiliInfo info = cache.get(bvid);
-        MovieDetail movieDetail = getMovieDetail(info, true);
+        MovieDetail movieDetail = getMovieDetail(info, client, true);
 
         try {
             String url = String.format(RELATED_API, bvid);
@@ -1885,7 +1897,7 @@ public class BiliBiliService {
 
         result.put("subs", getSubtitles(aid, cid));
 
-        if ("com.fongmi.android.tv".equals(client)) {
+        if ("com.fongmi.android.tv".equals(client) || "gui".equals(client)) {
             result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
         }
 

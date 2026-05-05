@@ -699,6 +699,22 @@ public class BiliBiliService {
         return title;
     }
 
+    private String buildTitle(BiliBiliInfo info, String client) {
+        String title = fixTitle(info.getTitle());
+        if ("gui".equals(client)) {
+            title += "(" + seconds2String(info.getDuration()) + ")";
+        }
+        return title;
+    }
+
+    private String buildTitle(BiliBiliSearchInfo.Video info, String client) {
+        String title = fixTitle(info.getTitle());
+        if ("gui".equals(client)) {
+            title += "(" + info.getLength() + ")";
+        }
+        return title;
+    }
+
     private String playCount(String view) {
         try {
             return playCount(Integer.parseInt(view));
@@ -1161,7 +1177,7 @@ public class BiliBiliService {
         return result;
     }
 
-    public MovieList getUpPlaylist(String tid) throws IOException {
+    public MovieList getUpPlaylist(String tid, String client) throws IOException {
         String[] parts = tid.split("\\$");
         String id = parts[1];
         String sort = "new";
@@ -1207,7 +1223,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
         movieDetail.setVod_play_from(BILI_BILI);
-        String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+        String playUrl = list.stream().map(e -> buildTitle(e, client) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
         movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
@@ -1572,7 +1588,7 @@ public class BiliBiliService {
         }
 
         if (bvid.startsWith("up$")) {
-            return getUpPlaylist(bvid);
+            return getUpPlaylist(bvid, client);
         }
 
         if (bvid.startsWith("popular$")) {
@@ -1626,7 +1642,7 @@ public class BiliBiliService {
             log.debug("related videos: {} {}", url, list);
             if (!list.isEmpty()) {
                 movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$相关视频");
-                String related = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + e.getAid() + "-" + e.getCid()).collect(Collectors.joining("#"));
+                String related = list.stream().map(e -> buildTitle(e, client) + "$" + e.getAid() + "-" + e.getCid()).collect(Collectors.joining("#"));
                 movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + related);
             }
         } catch (Exception e) {
@@ -1642,7 +1658,7 @@ public class BiliBiliService {
             }
 
             try {
-                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
+                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid(), client);
                 movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
                 String others = movieList.getList().get(0).getVod_play_url();
                 movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);

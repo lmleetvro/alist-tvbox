@@ -1414,17 +1414,20 @@ public class TvBoxService {
         result.put("url", url);
 
         DriverType driverType = switch (fsDetail.getProvider()) {
-            case "QuarkShare", "Quark", "QuarkTV" ->  DriverType.QUARK;
-            case "UCShare", "UC", "UCTV" ->  DriverType.UC;
-            case "ThunderBrowser", "ThunderShare" ->  DriverType.THUNDER;
-            case "115 Cloud", "115 Share" ->  DriverType.PAN115;
-            case "BaiduNetdisk", "BaiduShare2" ->  DriverType.BAIDU;
-            case "123Pan", "123PanShare" ->  DriverType.PAN123;
-            case "139Yun", "Yun139Share" ->  DriverType.PAN139;
-            case "189CloudPC", "189Share" ->  DriverType.CLOUD189;
-            case "AliyunShare",  "AliyundriveOpen" ->  DriverType.ALI;
+            case "QuarkShare", "Quark", "QuarkTV" -> DriverType.QUARK;
+            case "UCShare", "UC", "UCTV" -> DriverType.UC;
+            case "ThunderBrowser", "ThunderShare" -> DriverType.THUNDER;
+            case "115 Cloud", "115 Share" -> DriverType.PAN115;
+            case "BaiduNetdisk", "BaiduShare2" -> DriverType.BAIDU;
+            case "123Pan", "123PanShare" -> DriverType.PAN123;
+            case "139Yun", "Yun139Share" -> DriverType.PAN139;
+            case "189CloudPC", "189Share" -> DriverType.CLOUD189;
+            case "AliyunShare", "AliyundriveOpen" -> DriverType.ALI;
             default -> DriverType.UNKNOWN;
         };
+        if ("AliyunShare".equals(fsDetail.getProvider()) && fsDetail.getRawUrl().contains("115cdn.net")) {
+            driverType = DriverType.PAN115;
+        }
         result.put("type", driverType);
 
         if (url.contains("#proxy=0")) {
@@ -1447,7 +1450,7 @@ public class TvBoxService {
             result.put("header", Map.of("User-Agent", Constants.USER_AGENT, "Referer", "https://115.com/"));
         } else if (driverType == DriverType.BAIDU) {
             result.put("header", Map.of("User-Agent", "netdisk"));
-        } else if (url.contains("ali") || driverType ==  DriverType.ALI) {
+        } else if (url.contains("ali") || driverType == DriverType.ALI) {
             result.put("format", "application/octet-stream");
             result.put("header", Map.of("User-Agent", appProperties.getUserAgent(), "Referer", Constants.ALIPAN, "origin", Constants.ALIPAN));
         }

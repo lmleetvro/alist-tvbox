@@ -3,6 +3,7 @@
     <h1>网盘账号列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
+      <el-button @click="openConfig">配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </el-row>
     <div class="space"></div>
@@ -244,6 +245,42 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="configVisible" title="网盘账号配置" width="60%">
+      <div class="proxy-config-grid">
+        <div class="proxy-config-row proxy-config-head">
+          <span>类型</span>
+          <span>启用</span>
+          <span>并发数</span>
+          <span>分片大小</span>
+        </div>
+        <div class="proxy-config-row" v-for="item in driveTypes" :key="item.key">
+          <span>{{ item.label }}</span>
+          <el-switch
+            v-model="localProxyConfig[item.key].enabled"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+          <el-input-number
+            v-model="localProxyConfig[item.key].concurrency"
+            :min="1"
+            :max="64"
+          />
+          <el-input-number
+            v-model="localProxyConfig[item.key].chunk_size"
+            :min="256 * 1024"
+            :step="256 * 1024"
+          />
+        </div>
+      </div>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="configVisible = false">取消</el-button>
+        <el-button type="primary" @click="updateLocalProxyConfig">保存</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="dialogVisible" title="删除网盘账号" width="30%">
       <p>是否删除网盘账号 - {{ form.id + 4000 }}</p>
       <p> {{ getTypeName(form.type) }} ： {{ form.name }}</p>
@@ -300,14 +337,34 @@ import clipBorad from "vue-clipboard3";
 
 let {toClipboard} = clipBorad();
 
+type CloudDriveType = 'ALI' | 'QUARK' | 'UC' | 'PAN115' | 'PAN123' | 'PAN139' | 'BAIDU'
+
+type LocalProxyItem = {
+  enabled: boolean
+  concurrency: number
+  chunk_size: number
+}
+
+type LocalProxyConfig = Record<CloudDriveType, LocalProxyItem>
+
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const accounts = ref([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const configVisible = ref(false)
 const qrModel = ref(false)
 const qr115Model = ref(false)
 const driverRoundRobin = ref(false)
+const driveTypes: Array<{ key: CloudDriveType; label: string }> = [
+  {key: 'ALI', label: '阿里云盘'},
+  {key: 'QUARK', label: '夸克网盘'},
+  {key: 'UC', label: 'UC网盘'},
+  {key: 'PAN115', label: '115云盘'},
+  {key: 'PAN123', label: '123网盘'},
+  {key: 'PAN139', label: '移动云盘'},
+  {key: 'BAIDU', label: '百度网盘'},
+]
 const form = ref({
   id: 0,
   type: 'QUARK',
@@ -339,6 +396,16 @@ const qr = ref({
   query_token: '',
 })
 const qrType = ref('')
+const defaultLocalProxyConfig = (): LocalProxyConfig => ({
+  ALI: {enabled: true, concurrency: 20, chunk_size: 1024 * 1024},
+  QUARK: {enabled: true, concurrency: 20, chunk_size: 1024 * 1024},
+  UC: {enabled: true, concurrency: 10, chunk_size: 256 * 1024},
+  PAN115: {enabled: true, concurrency: 2, chunk_size: 1024 * 1024},
+  PAN123: {enabled: true, concurrency: 4, chunk_size: 256 * 1024},
+  PAN139: {enabled: true, concurrency: 4, chunk_size: 256 * 1024},
+  BAIDU: {enabled: true, concurrency: 5, chunk_size: 2 * 1024 * 1024},
+})
+const localProxyConfig = ref<LocalProxyConfig>(defaultLocalProxyConfig())
 
 const app = ref('alipaymini')
 const uid = ref('')
@@ -454,6 +521,49 @@ const handleAdd = () => {
     master: false,
   }
   formVisible.value = true
+}
+
+const normalizeLocalProxyConfig = (value: any): LocalProxyConfig => {
+  const defaults = defaultLocalProxyConfig()
+  for (const item of driveTypes) {
+    const current = value?.[item.key] || {}
+    defaults[item.key] = {
+      enabled: current.enabled ?? defaults[item.key].enabled,
+      concurrency: current.concurrency ?? defaults[item.key].concurrency,
+      chunk_size: current.chunk_size ?? defaults[item.key].chunk_size,
+    }
+  }
+  return defaults
+}
+
+const loadLocalProxyConfig = () => {
+  axios.get('/api/settings/local_proxy_config').then(({data}) => {
+    if (!data || !data.value) {
+      localProxyConfig.value = defaultLocalProxyConfig()
+      return
+    }
+
+    try {
+      localProxyConfig.value = normalizeLocalProxyConfig(JSON.parse(data.value))
+    } catch (e) {
+      localProxyConfig.value = defaultLocalProxyConfig()
+    }
+  })
+}
+
+const openConfig = () => {
+  loadLocalProxyConfig()
+  configVisible.value = true
+}
+
+const updateLocalProxyConfig = () => {
+  axios.post('/api/settings', {
+    name: 'local_proxy_config',
+    value: JSON.stringify(localProxyConfig.value),
+  }).then(() => {
+    ElMessage.success('更新成功')
+    configVisible.value = false
+  })
 }
 
 const getTypeName = (type: string) => {
@@ -674,6 +784,7 @@ const load = () => {
 
 onMounted(() => {
   load()
+  loadLocalProxyConfig()
   axios.get('/api/settings/driver_round_robin').then(({data}) => {
     driverRoundRobin.value = data.value === 'true'
   })
@@ -688,5 +799,21 @@ onMounted(() => {
 .json pre {
   height: 600px;
   overflow: scroll;
+}
+
+.proxy-config-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.proxy-config-row {
+  display: grid;
+  grid-template-columns: 120px 120px 160px 180px;
+  align-items: center;
+  gap: 12px;
+}
+
+.proxy-config-head {
+  font-weight: 600;
 }
 </style>

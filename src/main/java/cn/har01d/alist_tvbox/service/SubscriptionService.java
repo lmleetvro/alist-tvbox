@@ -1139,6 +1139,23 @@ public class SubscriptionService {
         return map;
     }
 
+    private Map<String, Object> readLocalProxyConfig() {
+        return settingRepository.findById("local_proxy_config")
+                .map(Setting::getValue)
+                .filter(StringUtils::isNotBlank)
+                .map(this::parseLocalProxyConfig)
+                .orElseGet(HashMap::new);
+    }
+
+    private Map<String, Object> parseLocalProxyConfig(String value) {
+        try {
+            return objectMapper.readValue(value, Map.class);
+        } catch (Exception e) {
+            log.warn("parse local proxy config failed: {}", value, e);
+            return new HashMap<>();
+        }
+    }
+
     private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         String url = readHostAddress("");
@@ -1146,10 +1163,11 @@ public class SubscriptionService {
         site.put("api", key);
         site.put("name", name);
         site.put("type", 3);
-        Map<String, String> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>();
         map.put("api", url);
         map.put("token", token.isBlank() ? "-" : token);
         map.put("uid", uid);
+        map.put("local_proxy_config", readLocalProxyConfig());
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);

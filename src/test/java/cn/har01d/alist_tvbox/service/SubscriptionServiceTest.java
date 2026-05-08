@@ -1,0 +1,132 @@
+package cn.har01d.alist_tvbox.service;
+
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class SubscriptionServiceTest {
+    @Mock
+    private Environment environment;
+    @Mock
+    private AppProperties appProperties;
+    @Mock
+    private RestTemplate restTemplate;
+    @Spy
+    private RestTemplateBuilder builder = new RestTemplateBuilder();
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+    @Mock
+    private SettingRepository settingRepository;
+    @Mock
+    private SubscriptionRepository subscriptionRepository;
+    @Mock
+    private AccountRepository accountRepository;
+    @Mock
+    private SiteRepository siteRepository;
+    @Mock
+    private AListLocalService aListLocalService;
+
+    @InjectMocks
+    private SubscriptionService subscriptionService;
+
+    @AfterEach
+    void clearRequestContext() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    @Test
+    void buildSiteShouldEmitEmptyLocalProxyConfigWhenSettingMissing() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        when(appProperties.isEnableHttps()).thenReturn(false);
+        when(settingRepository.findById("local_proxy_config")).thenReturn(Optional.empty());
+
+        Map<String, Object> site = ReflectionTestUtils.invokeMethod(
+                subscriptionService,
+                "buildSite",
+                "test-token",
+                "test-uid",
+                "csp_AList",
+                "AList"
+        );
+
+        String ext = (String) site.get("ext");
+        String json = new String(Base64.getDecoder().decode(ext), StandardCharsets.UTF_8);
+        Map<String, Object> extMap = objectMapper.readValue(json, Map.class);
+
+        assertThat(extMap).containsEntry("api", "http://127.0.0.1:4567");
+        assertThat(extMap).containsEntry("token", "test-token");
+        assertThat(extMap).containsEntry("uid", "test-uid");
+        assertThat(extMap).containsEntry("local_proxy_config", Map.of());
+        assertThat(extMap).doesNotContainKey("enable_local_proxy");
+    }
+
+    @Test
+    void buildSiteShouldEmitStoredLocalProxyConfig() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        when(appProperties.isEnableHttps()).thenReturn(false);
+        when(settingRepository.findById("local_proxy_config")).thenReturn(Optional.of(new Setting(
+                "local_proxy_config",
+                "{\"QUARK\":{\"enabled\":true,\"concurrency\":20,\"chunk_size\":1048576},\"UC\":{\"enabled\":false,\"concurrency\":10,\"chunk_size\":262144}}"
+        )));
+
+        Map<String, Object> site = ReflectionTestUtils.invokeMethod(
+                subscriptionService,
+                "buildSite",
+                "test-token",
+                "test-uid",
+                "csp_AList",
+                "AList"
+        );
+
+        String ext = (String) site.get("ext");
+        String json = new String(Base64.getDecoder().decode(ext), StandardCharsets.UTF_8);
+        Map<String, Object> extMap = objectMapper.readValue(json, Map.class);
+        Map<String, Object> localProxyConfig = (Map<String, Object>) extMap.get("local_proxy_config");
+
+        assertThat(localProxyConfig).containsKey("QUARK");
+        assertThat(localProxyConfig).containsKey("UC");
+        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("concurrency", 20);
+        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("chunk_size", 1048576);
+        assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("enabled", false);
+    }
+}

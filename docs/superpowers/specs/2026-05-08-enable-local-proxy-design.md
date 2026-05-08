@@ -68,6 +68,7 @@ Each supported type exposes:
 - `chunk_size`
 
 `enabled` is explicit. `concurrency = 1` does **not** mean disabled.
+`chunk_size` is expressed in `KB` and is passed to `site.ext` as `KB` directly.
 
 ### Compatibility
 
@@ -97,13 +98,13 @@ Recommended frontend data shape:
 
 ```json
 {
-  "ALI": {"enabled": true, "concurrency": 20, "chunk_size": 1048576},
-  "QUARK": {"enabled": true, "concurrency": 20, "chunk_size": 1048576},
-  "UC": {"enabled": true, "concurrency": 10, "chunk_size": 262144},
-  "PAN115": {"enabled": true, "concurrency": 2, "chunk_size": 1048576},
-  "PAN123": {"enabled": true, "concurrency": 4, "chunk_size": 262144},
-  "PAN139": {"enabled": true, "concurrency": 4, "chunk_size": 262144},
-  "BAIDU": {"enabled": true, "concurrency": 5, "chunk_size": 2097152}
+  "ALI": {"enabled": true, "concurrency": 20, "chunk_size": 1024},
+  "QUARK": {"enabled": true, "concurrency": 20, "chunk_size": 1024},
+  "UC": {"enabled": true, "concurrency": 10, "chunk_size": 256},
+  "PAN115": {"enabled": true, "concurrency": 2, "chunk_size": 1024},
+  "PAN123": {"enabled": true, "concurrency": 4, "chunk_size": 256},
+  "PAN139": {"enabled": true, "concurrency": 4, "chunk_size": 256},
+  "BAIDU": {"enabled": true, "concurrency": 5, "chunk_size": 2048}
 }
 ```
 
@@ -125,18 +126,18 @@ Recommended emitted `ext` shape:
   "token": "test-token",
   "uid": "test-uid",
   "local_proxy_config": {
-    "ALI": {"enabled": true, "concurrency": 20, "chunk_size": 1048576},
-    "QUARK": {"enabled": true, "concurrency": 20, "chunk_size": 1048576},
-    "UC": {"enabled": true, "concurrency": 10, "chunk_size": 262144},
-    "PAN115": {"enabled": true, "concurrency": 2, "chunk_size": 1048576},
-    "PAN123": {"enabled": true, "concurrency": 4, "chunk_size": 262144},
-    "PAN139": {"enabled": true, "concurrency": 4, "chunk_size": 262144},
-    "BAIDU": {"enabled": true, "concurrency": 5, "chunk_size": 2097152}
+    "ALI": {"enabled": true, "concurrency": 20, "chunk_size": 1024},
+    "QUARK": {"enabled": true, "concurrency": 20, "chunk_size": 1024},
+    "UC": {"enabled": true, "concurrency": 10, "chunk_size": 256},
+    "PAN115": {"enabled": true, "concurrency": 2, "chunk_size": 1024},
+    "PAN123": {"enabled": true, "concurrency": 4, "chunk_size": 256},
+    "PAN139": {"enabled": true, "concurrency": 4, "chunk_size": 256},
+    "BAIDU": {"enabled": true, "concurrency": 5, "chunk_size": 2048}
   }
 }
 ```
 
-The backend should treat invalid or missing `local_proxy_config` as an empty object rather than failing site generation.
+The backend should treat invalid or missing `local_proxy_config` as an empty object rather than failing site generation, and it should not convert `chunk_size` between `KB` and bytes.
 
 ### Source of Defaults
 
@@ -144,21 +145,21 @@ The per-type configuration is global and does not derive from existing account r
 
 Default values:
 - `DEFAULT_PROXY_CONCURRENCY = 1`
-- `DEFAULT_PROXY_CHUNK_SIZE = 256 * 1024`
+- `DEFAULT_PROXY_CHUNK_SIZE = 256`
 - `ALI_PROXY_CONCURRENCY = 20`
-- `ALI_PROXY_CHUNK_SIZE = 1024 * 1024`
+- `ALI_PROXY_CHUNK_SIZE = 1024`
 - `QUARK_PROXY_CONCURRENCY = 20`
-- `QUARK_PROXY_CHUNK_SIZE = 1024 * 1024`
+- `QUARK_PROXY_CHUNK_SIZE = 1024`
 - `UC_PROXY_CONCURRENCY = 10`
-- `UC_PROXY_CHUNK_SIZE = 256 * 1024`
+- `UC_PROXY_CHUNK_SIZE = 256`
 - `PAN115_PROXY_CONCURRENCY = 2`
-- `PAN115_PROXY_CHUNK_SIZE = 1024 * 1024`
+- `PAN115_PROXY_CHUNK_SIZE = 1024`
 - `PAN123_PROXY_CONCURRENCY = 4`
 - `PAN123_PROXY_CHUNK_SIZE = DEFAULT_PROXY_CHUNK_SIZE`
 - `PAN139_PROXY_CONCURRENCY = 4`
 - `PAN139_PROXY_CHUNK_SIZE = DEFAULT_PROXY_CHUNK_SIZE`
 - `BAIDU_PROXY_CONCURRENCY = 5`
-- `BAIDU_PROXY_CHUNK_SIZE = 2 * 1024 * 1024`
+- `BAIDU_PROXY_CHUNK_SIZE = 2048`
 
 The dialog should synthesize default rows from these values when the setting is absent or incomplete.
 
@@ -169,7 +170,7 @@ The dialog should synthesize default rows from these values when the setting is 
 3. The user edits values in the configuration dialog and saves.
 4. The frontend persists the per-type JSON through `/api/settings`.
 5. `SubscriptionService#buildSite` reads `local_proxy_config`.
-6. The service injects the value into `ext`.
+6. The service injects the value into `ext` without unit conversion.
 7. Built-in spiders decode `ext` and consume the per-type config.
 
 ## Error Handling
@@ -177,6 +178,7 @@ The dialog should synthesize default rows from these values when the setting is 
 - Missing `local_proxy_config` falls back to `{}` on the backend and a synthesized default dialog state on the frontend.
 - Malformed `local_proxy_config` should not break subscription generation; the backend should log and emit `{}`.
 - Incomplete `local_proxy_config` should be merged with defaults on the frontend before save.
+- Existing saved `chunk_size` values are not migrated; once this change ships, `chunk_size` is interpreted as `KB`.
 
 ## Testing
 
@@ -194,6 +196,7 @@ Verify via build/type-check that:
 - The dialog can load and save `local_proxy_config`
 - The dialog shows only supported `CloudDriveType` values
 - The old `ConfigView.vue` entry is removed if still present
+- The dialog labels or inputs make the `KB` unit explicit
 
 ## Acceptance Criteria
 
@@ -202,6 +205,7 @@ Verify via build/type-check that:
 - `QUARK/QUARK_TV` share one `QUARK` configuration.
 - `UC/UC_TV` share one `UC` configuration.
 - Each supported type exposes `enabled`, `concurrency`, and `chunk_size`.
+- `chunk_size` is edited and transmitted in `KB`.
 - Built-in site `ext` includes `local_proxy_config`.
 - Built-in site `ext` no longer includes `enable_local_proxy`.
 - Targeted backend tests cover the new `ext` payload structure.

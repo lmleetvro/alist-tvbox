@@ -65,7 +65,7 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void buildSiteShouldEmitEmptyLocalProxyConfigWhenSettingMissing() throws Exception {
+    void buildSiteShouldEmitCachedLocalProxyConfigWhenSettingMissing() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
         request.setScheme("http");
         request.setServerName("127.0.0.1");
@@ -73,8 +73,10 @@ class SubscriptionServiceTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         when(appProperties.isEnableHttps()).thenReturn(false);
-        when(settingRepository.findById("local_proxy_config")).thenReturn(Optional.empty());
-
+        when(appProperties.getLocalProxyConfig()).thenReturn((Map) Map.of(
+                "QUARK", Map.of("enabled", true, "concurrency", 33, "chunk_size", 768),
+                "UC", Map.of("enabled", false, "concurrency", 7, "chunk_size", 384)
+        ));
         Map<String, Object> site = ReflectionTestUtils.invokeMethod(
                 subscriptionService,
                 "buildSite",
@@ -91,12 +93,19 @@ class SubscriptionServiceTest {
         assertThat(extMap).containsEntry("api", "http://127.0.0.1:4567");
         assertThat(extMap).containsEntry("token", "test-token");
         assertThat(extMap).containsEntry("uid", "test-uid");
-        assertThat(extMap).containsEntry("local_proxy_config", Map.of());
-        assertThat(extMap).doesNotContainKey("enable_local_proxy");
+        Map<String, Object> localProxyConfig = (Map<String, Object>) extMap.get("local_proxy_config");
+        assertThat(localProxyConfig).containsKeys("QUARK", "UC");
+        assertThat(localProxyConfig).doesNotContainKeys("ALI", "PAN115", "PAN123", "PAN139", "BAIDU");
+        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("enabled", true);
+        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("concurrency", 33);
+        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("chunk_size", 768);
+        assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("enabled", false);
+        assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("concurrency", 7);
+        assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("chunk_size", 384);
     }
 
     @Test
-    void buildSiteShouldEmitStoredLocalProxyConfig() throws Exception {
+    void buildSiteShouldEmitCachedLocalProxyConfig() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
         request.setScheme("http");
         request.setServerName("127.0.0.1");
@@ -104,11 +113,10 @@ class SubscriptionServiceTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         when(appProperties.isEnableHttps()).thenReturn(false);
-        when(settingRepository.findById("local_proxy_config")).thenReturn(Optional.of(new Setting(
-                "local_proxy_config",
-                "{\"QUARK\":{\"enabled\":true,\"concurrency\":20,\"chunk_size\":1048576},\"UC\":{\"enabled\":false,\"concurrency\":10,\"chunk_size\":262144}}"
-        )));
-
+        when(appProperties.getLocalProxyConfig()).thenReturn((Map) Map.of(
+                "QUARK", Map.of("enabled", true, "concurrency", 20, "chunk_size", 1024),
+                "UC", Map.of("enabled", false, "concurrency", 10, "chunk_size", 256)
+        ));
         Map<String, Object> site = ReflectionTestUtils.invokeMethod(
                 subscriptionService,
                 "buildSite",
@@ -126,7 +134,8 @@ class SubscriptionServiceTest {
         assertThat(localProxyConfig).containsKey("QUARK");
         assertThat(localProxyConfig).containsKey("UC");
         assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("concurrency", 20);
-        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("chunk_size", 1048576);
+        assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("chunk_size", 1024);
         assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("enabled", false);
+        assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("chunk_size", 256);
     }
 }

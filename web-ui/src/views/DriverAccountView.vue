@@ -251,7 +251,7 @@
           <span>类型</span>
           <span>启用</span>
           <span>并发数</span>
-          <span>分片大小</span>
+          <span>分片大小(KB)</span>
         </div>
         <div class="proxy-config-row" v-for="item in driveTypes" :key="item.key">
           <span>{{ item.label }}</span>
@@ -268,8 +268,8 @@
           />
           <el-input-number
             v-model="localProxyConfig[item.key].chunk_size"
-            :min="256 * 1024"
-            :step="256 * 1024"
+            :min="256"
+            :step="256"
           />
         </div>
       </div>
@@ -397,13 +397,13 @@ const qr = ref({
 })
 const qrType = ref('')
 const defaultLocalProxyConfig = (): LocalProxyConfig => ({
-  ALI: {enabled: true, concurrency: 20, chunk_size: 1024 * 1024},
-  QUARK: {enabled: true, concurrency: 20, chunk_size: 1024 * 1024},
-  UC: {enabled: true, concurrency: 10, chunk_size: 256 * 1024},
-  PAN115: {enabled: true, concurrency: 2, chunk_size: 1024 * 1024},
-  PAN123: {enabled: true, concurrency: 4, chunk_size: 256 * 1024},
-  PAN139: {enabled: true, concurrency: 4, chunk_size: 256 * 1024},
-  BAIDU: {enabled: true, concurrency: 5, chunk_size: 2 * 1024 * 1024},
+  ALI: {enabled: true, concurrency: 20, chunk_size: 1024},
+  QUARK: {enabled: true, concurrency: 20, chunk_size: 1024},
+  UC: {enabled: true, concurrency: 10, chunk_size: 256},
+  PAN115: {enabled: true, concurrency: 2, chunk_size: 1024},
+  PAN123: {enabled: true, concurrency: 4, chunk_size: 256},
+  PAN139: {enabled: true, concurrency: 4, chunk_size: 256},
+  BAIDU: {enabled: true, concurrency: 5, chunk_size: 2048},
 })
 const localProxyConfig = ref<LocalProxyConfig>(defaultLocalProxyConfig())
 

@@ -1432,7 +1432,7 @@ public class TvBoxService {
 
         if (url.contains("#proxy=0")) {
             // do nothing
-        } else if (isUseProxy(url) && !"client-proxy".equals(type)) {
+        } else if (isUseProxy(url) && !shouldSkipBackendProxy(type, driverType)) {
             url = buildProxyUrl(site, name, path);
             result.put("url", url);
         } else if (driverType == DriverType.QUARK) {
@@ -1487,6 +1487,44 @@ public class TvBoxService {
         } else {
             return driverAccountRepository.findByTypeAndMasterTrue(type).orElse(null);
         }
+    }
+
+    private boolean shouldSkipBackendProxy(String type, DriverType driverType) {
+        return "client-proxy".equals(type) && isLocalProxyEnabled(driverType);
+    }
+
+    private boolean isLocalProxyEnabled(DriverType driverType) {
+        if (driverType == null || driverType == DriverType.UNKNOWN) {
+            return false;
+        }
+
+        Map<String, Map<String, Object>> config = appProperties.getLocalProxyConfig();
+        if (config == null || config.isEmpty()) {
+            return false;
+        }
+
+        Map<String, Object> item = config.get(driverType.name());
+        if (item == null || item.isEmpty()) {
+            return false;
+        }
+
+        boolean enabled = !(item.get("enabled") instanceof Boolean value) || value;
+        int concurrency = readInt(item.get("concurrency"), 1);
+        return enabled && concurrency > 1;
+    }
+
+    private int readInt(Object value, int defaultValue) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && StringUtils.isNotBlank(text)) {
+            try {
+                return Integer.parseInt(text);
+            } catch (NumberFormatException e) {
+                log.debug("invalid integer value: {}", text, e);
+            }
+        }
+        return defaultValue;
     }
 
     private boolean isUseProxy(String url) {

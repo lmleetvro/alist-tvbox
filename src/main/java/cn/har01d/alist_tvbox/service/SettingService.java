@@ -13,6 +13,8 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -52,6 +54,7 @@ public class SettingService {
     private final TokenFilter tokenFilter;
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
+    private final ObjectMapper objectMapper;
 
     public SettingService(JdbcTemplate jdbcTemplate,
                           Environment environment,
@@ -60,7 +63,8 @@ public class SettingService {
                           AListLocalService aListLocalService,
                           TokenFilter tokenFilter,
                           SettingRepository settingRepository,
-                          DriverAccountRepository driverAccountRepository) {
+                          DriverAccountRepository driverAccountRepository,
+                          ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
@@ -69,6 +73,7 @@ public class SettingService {
         this.tokenFilter = tokenFilter;
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
+        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -89,6 +94,7 @@ public class SettingService {
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(72));
         appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
+        appProperties.setLocalProxyConfig(loadLocalProxyConfig());
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
@@ -297,6 +303,9 @@ public class SettingService {
         if ("debug_log".equals(setting.getName())) {
             setLogLevel(setting);
         }
+        if ("local_proxy_config".equals(setting.getName())) {
+            appProperties.setLocalProxyConfig(parseLocalProxyConfig(setting.getValue()));
+        }
         if ("delete_delay_time".equals(setting.getName())) {
             aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");
         }
@@ -313,6 +322,25 @@ public class SettingService {
             aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
         }
         return settingRepository.save(setting);
+    }
+
+    private Map<String, Map<String, Object>> loadLocalProxyConfig() {
+        return settingRepository.findById("local_proxy_config")
+                .map(Setting::getValue)
+                .filter(StringUtils::isNotBlank)
+                .map(this::parseLocalProxyConfig)
+                .orElseGet(AppProperties::defaultLocalProxyConfig);
+    }
+
+    private Map<String, Map<String, Object>> parseLocalProxyConfig(String value) {
+        try {
+            Map<String, Map<String, Object>> map = objectMapper.readValue(value, new TypeReference<>() {
+            });
+            return map == null || map.isEmpty() ? AppProperties.defaultLocalProxyConfig() : AppProperties.copyLocalProxyConfig(map);
+        } catch (Exception e) {
+            log.warn("parse local proxy config failed: {}", value, e);
+            return AppProperties.defaultLocalProxyConfig();
+        }
     }
 
     private void setLogLevel(Setting setting) {

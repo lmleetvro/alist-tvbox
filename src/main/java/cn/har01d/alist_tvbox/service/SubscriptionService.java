@@ -1140,20 +1140,11 @@ public class SubscriptionService {
     }
 
     private Map<String, Object> readLocalProxyConfig() {
-        return settingRepository.findById("local_proxy_config")
-                .map(Setting::getValue)
-                .filter(StringUtils::isNotBlank)
-                .map(this::parseLocalProxyConfig)
-                .orElseGet(HashMap::new);
-    }
-
-    private Map<String, Object> parseLocalProxyConfig(String value) {
-        try {
-            return objectMapper.readValue(value, Map.class);
-        } catch (Exception e) {
-            log.warn("parse local proxy config failed: {}", value, e);
-            return new HashMap<>();
+        Map<String, Map<String, Object>> config = appProperties.getLocalProxyConfig();
+        if (config == null || config.isEmpty()) {
+            return new HashMap<>(AppProperties.defaultLocalProxyConfig());
         }
+        return new HashMap<>(AppProperties.copyLocalProxyConfig(config));
     }
 
     private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {

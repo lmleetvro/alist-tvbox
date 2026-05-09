@@ -1699,6 +1699,9 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String ac, String tid) {
+        if (tid.contains("%24")) {
+            tid = URLDecoder.decode(tid, StandardCharsets.UTF_8);
+        }
         if (!tid.contains("$")) {
             return getDetail(ac, Integer.parseInt(tid));
         }

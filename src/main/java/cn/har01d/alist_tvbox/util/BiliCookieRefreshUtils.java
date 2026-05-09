@@ -16,6 +16,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class BiliCookieRefreshUtils {
     private static final String PUBLIC_KEY = """
@@ -52,6 +54,16 @@ public final class BiliCookieRefreshUtils {
             }
         }
         return null;
+    }
+
+    public static String ensureBuvid3(String cookieHeader) {
+        if (StringUtils.isBlank(cookieHeader)) {
+            return cookieHeader;
+        }
+        if (StringUtils.isNotBlank(getCookieValue(cookieHeader, "buvid3"))) {
+            return cookieHeader;
+        }
+        return cookieHeader + "; buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc";
     }
 
     public static String mergeCookieHeader(String cookieHeader, List<String> setCookies) {

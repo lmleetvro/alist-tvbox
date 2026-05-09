@@ -22,9 +22,6 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
-
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_TOKEN;
 
@@ -56,6 +53,7 @@ public class BiliCookieRefreshService {
         if (StringUtils.isBlank(cookie) || Constants.BILIBILI_CODE.equals(cookie)) {
             return cookie;
         }
+        cookie = BiliCookieRefreshUtils.ensureBuvid3(cookie);
         String refreshToken = settingRepository.findById(BILIBILI_TOKEN).map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(refreshToken)) {
             return cookie;
@@ -115,9 +113,7 @@ public class BiliCookieRefreshService {
             }
 
             String newCookie = BiliCookieRefreshUtils.mergeCookieHeader(cookie, refreshResponse.getHeaders().get(HttpHeaders.SET_COOKIE));
-            if (!newCookie.contains("buvid3=")) {
-                newCookie += "; buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc";
-            }
+            newCookie = BiliCookieRefreshUtils.ensureBuvid3(newCookie);
             String newRefreshToken = refreshJson.path("data").path("refresh_token").asText("");
             settingRepository.save(new Setting(BILIBILI_COOKIE, newCookie));
             if (StringUtils.isNotBlank(newRefreshToken)) {

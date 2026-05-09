@@ -70,6 +70,7 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
+import cn.har01d.alist_tvbox.util.BiliCookieRefreshUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -336,10 +337,7 @@ public class BiliBiliService {
     }
 
     public Map<String, Object> updateCookie(CookieData cookieData) {
-        String cookie = cookieData.getCookie();
-        if (!cookie.contains("buvid3=")) {
-            cookie += "; buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc";
-        }
+        String cookie = BiliCookieRefreshUtils.ensureBuvid3(cookieData.getCookie());
         settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
         if (cookieData.getRefreshToken() != null) {
             settingRepository.save(new Setting(BILIBILI_TOKEN, cookieData.getRefreshToken().trim()));
@@ -412,6 +410,7 @@ public class BiliBiliService {
                 if (StringUtils.isNotBlank(result.getRefresh_token())) {
                     log.info("扫码登录成功");
                     String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
+                    cookie = BiliCookieRefreshUtils.ensureBuvid3(cookie);
                     settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
                     settingRepository.save(new Setting(BILIBILI_TOKEN, result.getRefresh_token()));
 //                    try {

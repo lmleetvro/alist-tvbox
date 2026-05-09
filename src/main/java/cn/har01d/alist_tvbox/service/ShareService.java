@@ -765,13 +765,27 @@ public class ShareService {
         return "";
     }
 
+    private String normalizeBaiduShareId(String shareId) {
+        if (StringUtils.isBlank(shareId)) {
+            return shareId;
+        }
+        if (shareId.length() == 23 && shareId.startsWith("1")) {
+            return shareId;
+        }
+        if (shareId.length() == 22 && !shareId.startsWith("1")) {
+            return "1" + shareId;
+        }
+        return shareId;
+    }
+
     public boolean parseLink(Share share) {
         String url = share.getShareId();
         if (!url.startsWith("http")) {
             String[] parts = url.split("@");
             if (parts.length == 3 || (parts.length == 2 && url.endsWith("@"))) {
-                share.setType(Integer.parseInt(parts[0]));
-                share.setShareId(parts[1]);
+                int type = Integer.parseInt(parts[0]);
+                share.setType(type);
+                share.setShareId(type == 10 ? normalizeBaiduShareId(parts[1]) : parts[1]);
                 if (parts.length > 2) {
                     share.setPassword(parts[2]);
                 }
@@ -904,7 +918,7 @@ public class ShareService {
         m = SHARE_BD_LINK2.matcher(url);
         if (m.find()) {
             share.setType(10);
-            share.setShareId(m.group(1));
+            share.setShareId(normalizeBaiduShareId(m.group(1)));
             share.setPassword(parsePassword(url));
             return true;
         }

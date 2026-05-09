@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.util;
 
 import org.apache.commons.lang3.StringUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
@@ -13,8 +16,6 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public final class BiliCookieRefreshUtils {
     private static final String PUBLIC_KEY = """
@@ -25,7 +26,6 @@ public final class BiliCookieRefreshUtils {
             JNrRuoEUXpabUzGB8QIDAQAB
             -----END PUBLIC KEY-----
             """;
-    private static final Pattern REFRESH_CSRF_PATTERN = Pattern.compile("<div\\s+id=[\"']1-name[\"']\\s*>([^<]+)</div>");
     private static final PublicKey RSA_PUBLIC_KEY = loadPublicKey();
 
     private BiliCookieRefreshUtils() {
@@ -43,9 +43,13 @@ public final class BiliCookieRefreshUtils {
         if (StringUtils.isBlank(html)) {
             return null;
         }
-        Matcher matcher = REFRESH_CSRF_PATTERN.matcher(html);
-        if (matcher.find()) {
-            return matcher.group(1).trim();
+        Document document = Jsoup.parse(html);
+        Element element = document.getElementById("1-name");
+        if (element != null) {
+            String text = element.text().trim();
+            if (StringUtils.isNotBlank(text)) {
+                return text;
+            }
         }
         return null;
     }

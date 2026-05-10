@@ -50,24 +50,40 @@ public class BiliCookieRefreshService {
     }
 
     public synchronized String refreshIfNeeded(String cookie) {
+        return refreshIfNeeded(cookie, false);
+    }
+
+    public synchronized String refreshIfNeeded(String cookie, boolean forceCheck) {
         if (StringUtils.isBlank(cookie) || Constants.BILIBILI_CODE.equals(cookie)) {
+            if (forceCheck) {
+                log.info("B站 Cookie 强制刷新检查已跳过：cookie 为空或为内置账号");
+            }
             return cookie;
         }
         cookie = BiliCookieRefreshUtils.ensureBuvid3(cookie);
         String refreshToken = settingRepository.findById(BILIBILI_TOKEN).map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(refreshToken)) {
+            if (forceCheck) {
+                log.info("B站 Cookie 强制刷新检查已跳过：缺少 refresh_token");
+            }
             return cookie;
         }
-        if (cookie.equals(lastCheckedCookie) && Instant.now().isBefore(lastCheckedAt.plus(CHECK_INTERVAL))) {
+        if (!forceCheck && cookie.equals(lastCheckedCookie) && Instant.now().isBefore(lastCheckedAt.plus(CHECK_INTERVAL))) {
             return cookie;
         }
         String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
         if (StringUtils.isBlank(csrf)) {
+            if (forceCheck) {
+                log.info("B站 Cookie 强制刷新检查已跳过：cookie 中缺少 bili_jct");
+            }
             return cookie;
         }
         try {
             JsonNode info = restTemplate.exchange(COOKIE_INFO_API, HttpMethod.GET, new HttpEntity<>(buildHeaders(cookie, false)), JsonNode.class).getBody();
             if (!needsRefresh(info)) {
+                if (forceCheck) {
+                    log.info("B站 Cookie 强制刷新检查完成：当前无需刷新");
+                }
                 remember(cookie);
                 return cookie;
             }
@@ -122,7 +138,11 @@ public class BiliCookieRefreshService {
 
             confirmRefresh(newCookie, refreshToken);
             remember(newCookie);
-            log.info("B站 Cookie 已刷新");
+            if (forceCheck) {
+                log.info("B站 Cookie 强制刷新检查完成：Cookie 已刷新");
+            } else {
+                log.info("B站 Cookie 已刷新");
+            }
             return newCookie;
         } catch (Exception e) {
             log.warn("B站 Cookie 刷新异常", e);

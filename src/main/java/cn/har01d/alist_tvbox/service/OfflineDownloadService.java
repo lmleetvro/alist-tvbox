@@ -18,8 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -63,23 +63,20 @@ public class OfflineDownloadService {
 
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
-    private final TvBoxService tvBoxService;
-    private final SubscriptionService subscriptionService;
+    private final ObjectProvider<TvBoxService> tvBoxServiceProvider;
     private final OfflineDownloadTaskRepository offlineDownloadTaskRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
     public OfflineDownloadService(SettingRepository settingRepository,
                                   DriverAccountRepository driverAccountRepository,
-                                  @Lazy TvBoxService tvBoxService,
-                                  SubscriptionService subscriptionService,
+                                  ObjectProvider<TvBoxService> tvBoxServiceProvider,
                                   OfflineDownloadTaskRepository offlineDownloadTaskRepository,
                                   RestTemplateBuilder builder,
                                   ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
-        this.tvBoxService = tvBoxService;
-        this.subscriptionService = subscriptionService;
+        this.tvBoxServiceProvider = tvBoxServiceProvider;
         this.offlineDownloadTaskRepository = offlineDownloadTaskRepository;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
@@ -138,7 +135,7 @@ public class OfflineDownloadService {
         if (target.folder()) {
             targetPath += "/~playlist";
         }
-        return tvBoxService.getDetail(ac, "1$" + targetPath);
+        return tvBoxServiceProvider.getObject().getDetail(ac, "1$" + targetPath);
     }
 
     public String downloadPath(OfflineDownloadRequest request) {

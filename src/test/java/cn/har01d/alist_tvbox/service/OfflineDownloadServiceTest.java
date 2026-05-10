@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -52,7 +53,7 @@ class OfflineDownloadServiceTest {
     @Mock
     private TvBoxService tvBoxService;
     @Mock
-    private SubscriptionService subscriptionService;
+    private ObjectProvider<TvBoxService> tvBoxServiceProvider;
     @Mock
     private OfflineDownloadTaskRepository offlineDownloadTaskRepository;
     @Mock
@@ -67,11 +68,11 @@ class OfflineDownloadServiceTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         lenient().when(restTemplateBuilder.build()).thenReturn(restTemplate);
+        lenient().when(tvBoxServiceProvider.getObject()).thenReturn(tvBoxService);
         service = new OfflineDownloadService(
                 settingRepository,
                 driverAccountRepository,
-                tvBoxService,
-                subscriptionService,
+                tvBoxServiceProvider,
                 offlineDownloadTaskRepository,
                 restTemplateBuilder,
                 objectMapper
@@ -303,6 +304,7 @@ class OfflineDownloadServiceTest {
         assertEquals(1, result.getList().size());
         assertEquals("1", result.getList().getFirst().getVod_id());
         verify(offlineDownloadTaskRepository).save(any(OfflineDownloadTask.class));
+        verify(tvBoxServiceProvider).getObject();
     }
 
     @Test
@@ -353,7 +355,6 @@ class OfflineDownloadServiceTest {
 
         assertEquals(1, result.getList().size());
         assertEquals("7", result.getList().getFirst().getVod_id());
-        verify(subscriptionService, never()).checkToken(any());
     }
 
     @Test

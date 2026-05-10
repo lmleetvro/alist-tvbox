@@ -143,6 +143,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
+          <el-button type="primary" @click="refreshBilibiliCookie">强制刷新</el-button>
         </el-form-item>
         <el-form-item label="上报播放记录">
           <el-switch
@@ -422,6 +423,15 @@ const handleSave = () => {
 const updateBilibiliCookie = () => {
   axios.post('/api/bilibili/cookie', {cookie: bilibiliCookie.value, refreshToken: bilibiliRefreshToken.value}).then(() => {
     ElMessage.success('更新成功')
+    getBilibiliCookie()
+    getBilibiliRefreshToken()
+    loadUser()
+  })
+}
+
+const refreshBilibiliCookie = () => {
+  axios.post('/api/bilibili/refresh').then(() => {
+    ElMessage.success('已触发刷新检查')
     getBilibiliCookie()
     getBilibiliRefreshToken()
     loadUser()

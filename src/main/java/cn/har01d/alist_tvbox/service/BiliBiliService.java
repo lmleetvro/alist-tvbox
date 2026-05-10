@@ -108,8 +108,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
@@ -341,6 +339,16 @@ public class BiliBiliService {
         settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
         if (cookieData.getRefreshToken() != null) {
             settingRepository.save(new Setting(BILIBILI_TOKEN, cookieData.getRefreshToken().trim()));
+        }
+        return getLoginStatus();
+    }
+
+    public Map<String, Object> refreshCookie() {
+        log.info("手动触发 B站 Cookie 刷新检查");
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        String refreshedCookie = biliCookieRefreshService.refreshIfNeeded(cookie, true);
+        if (StringUtils.isNotBlank(refreshedCookie) && !StringUtils.equals(cookie, refreshedCookie)) {
+            settingRepository.save(new Setting(BILIBILI_COOKIE, refreshedCookie));
         }
         return getLoginStatus();
     }

@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.service.TvBoxService;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -13,17 +14,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicOfflineDownloadController {
     private final OfflineDownloadService offlineDownloadService;
     private final SubscriptionService subscriptionService;
+    private final TvBoxService tvBoxService;
 
     public PublicOfflineDownloadController(OfflineDownloadService offlineDownloadService,
-                                           SubscriptionService subscriptionService) {
+                                           SubscriptionService subscriptionService,
+                                           TvBoxService tvBoxService) {
         this.offlineDownloadService = offlineDownloadService;
         this.subscriptionService = subscriptionService;
+        this.tvBoxService = tvBoxService;
     }
 
     @PostMapping("/offline_download")
     public Object download(@RequestBody OfflineDownloadRequest request,
                            @RequestParam(required = false, defaultValue = "") String ac) {
-        return offlineDownloadService.download(request, ac);
+        return download("", request, ac);
     }
 
     @PostMapping("/offline_download/{token}")
@@ -31,6 +35,12 @@ public class PublicOfflineDownloadController {
                            @RequestBody OfflineDownloadRequest request,
                            @RequestParam(required = false, defaultValue = "") String ac) {
         subscriptionService.checkToken(token);
-        return offlineDownloadService.download(request, ac);
+
+        OfflineDownloadService.DownloadTarget target = offlineDownloadService.downloadTarget(request);
+        String targetPath = target.path();
+        if (target.folder()) {
+            targetPath += "/~playlist";
+        }
+        return tvBoxService.getDetail(ac, "1$" + targetPath);
     }
 }

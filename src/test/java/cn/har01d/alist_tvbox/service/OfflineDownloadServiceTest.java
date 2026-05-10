@@ -242,122 +242,6 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
-    void downloadShouldRejectUnsupportedScheme() {
-        BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("ftp://example.com/test"), ""));
-
-        assertEquals("不支持的离线下载链接", exception.getMessage());
-    }
-
-    @Test
-    void downloadShouldRejectDisabledConfig() {
-        when(settingRepository.findById("offline_download_config")).thenReturn(Optional.empty());
-
-        BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
-
-        assertEquals("离线下载未开启", exception.getMessage());
-    }
-
-    @Test
-    void downloadShouldRejectThunderConfig() {
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"THUNDER\",\"accountId\":13}")));
-
-        BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
-
-        assertEquals("当前仅支持115云盘离线下载", exception.getMessage());
-    }
-
-    @Test
-    void downloadShouldAppendPlaylistForFolderResult() {
-        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
-                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
-        MovieList movieList = new MovieList();
-        MovieDetail detail = new MovieDetail();
-        detail.setVod_id("1");
-        movieList.getList().add(detail);
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
-        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(spaceResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenAnswer(invocation -> {
-                    HttpEntity<?> entity = invocation.getArgument(2);
-                    assertCookieHeaders(entity, account.getCookie(), "https://115.com/");
-                    String body = entity.getBody().toString();
-                    assertTrue(body.contains("sign=sign-value"));
-                    assertTrue(body.contains("time=1778368286"));
-                    assertTrue(body.contains("uid=6338615"));
-                    assertTrue(body.contains("url%5B0%5D=magnet%3A%3Fxt%3Durn%3Abtih%3Atest"));
-                    assertTrue(body.contains("wp_path_id=3142159731515950166"));
-                    return textHtmlJson(addTaskResponse());
-                });
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
-
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
-
-        assertEquals(1, result.getList().size());
-        assertEquals("1", result.getList().getFirst().getVod_id());
-        verify(offlineDownloadTaskRepository).save(any(OfflineDownloadTask.class));
-        verify(tvBoxServiceProvider).getObject();
-    }
-
-    @Test
-    void downloadShouldPassAcToTvBoxDetail() {
-        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
-                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
-        MovieList movieList = new MovieList();
-        MovieDetail detail = new MovieDetail();
-        detail.setVod_id("3");
-        movieList.getList().add(detail);
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
-        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(tvBoxService.getDetail("list", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(spaceResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(addTaskResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
-
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "list");
-
-        assertEquals(1, result.getList().size());
-        assertEquals("3", result.getList().getFirst().getVod_id());
-    }
-
-    @Test
-    void downloadShouldKeepCurrentTokenContext() {
-        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
-                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
-        MovieList movieList = new MovieList();
-        MovieDetail detail = new MovieDetail();
-        detail.setVod_id("7");
-        movieList.getList().add(detail);
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
-        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(spaceResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(addTaskResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
-
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
-
-        assertEquals(1, result.getList().size());
-        assertEquals("7", result.getList().getFirst().getVod_id());
-    }
-
-    @Test
     void downloadPathShouldReturnOfflineTargetPath() {
         DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
                 "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
@@ -374,59 +258,6 @@ class OfflineDownloadServiceTest {
         String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
 
         assertEquals("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", result);
-    }
-
-    @Test
-    void downloadShouldNotAppendPlaylistForFileResult() {
-        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
-                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
-        MovieList movieList = new MovieList();
-        MovieDetail detail = new MovieDetail();
-        detail.setVod_id("2");
-        movieList.getList().add(detail);
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
-        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务.mkv")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(spaceResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(addTaskResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务.mkv", 2, false)));
-
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
-
-        assertEquals(1, result.getList().size());
-        assertEquals("2", result.getList().getFirst().getVod_id());
-    }
-
-    @Test
-    void downloadShouldReuseRemoteTaskWhenAddTaskReportsDuplicate() {
-        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
-                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
-        MovieList movieList = new MovieList();
-        MovieDetail detail = new MovieDetail();
-        detail.setVod_id("9");
-        movieList.getList().add(detail);
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
-        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(spaceResponse()));
-        ObjectNode addTask = objectMapper.createObjectNode();
-        addTask.put("state", false);
-        addTask.put("error_msg", "任务已存在，请勿输入重复的链接地址");
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(addTask));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
-                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
-
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
-
-        assertEquals(1, result.getList().size());
-        assertEquals("9", result.getList().getFirst().getVod_id());
     }
 
     @Test
@@ -483,19 +314,6 @@ class OfflineDownloadServiceTest {
 
         assertEquals("/115云盘/新115账号名/alist-tvbox-offline/完成任务", result);
         verify(restTemplate, never()).exchange(eq("https://115.com/?ct=clouddownload&ac=space"), any(), any(), eq(String.class));
-    }
-
-    @Test
-    void downloadShouldRejectInvalid115Cookie() {
-        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166", "CID=test-cid; SEID=test-seid");
-        when(settingRepository.findById("offline_download_config"))
-                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12}")));
-        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-
-        BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
-
-        assertEquals("115账号Cookie缺少UID", exception.getMessage());
     }
 
     private DriverAccount account(int id, String name, String folder, String cookie) {

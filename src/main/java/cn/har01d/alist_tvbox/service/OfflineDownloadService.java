@@ -58,7 +58,7 @@ public class OfflineDownloadService {
     private record StoredConfig(boolean enabled, String driverType, Integer accountId, String offlineFolderId) {
     }
 
-    private record DownloadTarget(String path, boolean folder) {
+    public record DownloadTarget(String path, boolean folder) {
     }
 
     private final SettingRepository settingRepository;
@@ -129,20 +129,11 @@ public class OfflineDownloadService {
         );
     }
 
-    public Object download(OfflineDownloadRequest request, String ac) {
-        DownloadTarget target = downloadTarget(request);
-        String targetPath = target.path();
-        if (target.folder()) {
-            targetPath += "/~playlist";
-        }
-        return tvBoxServiceProvider.getObject().getDetail(ac, "1$" + targetPath);
-    }
-
     public String downloadPath(OfflineDownloadRequest request) {
         return downloadTarget(request).path();
     }
 
-    private DownloadTarget downloadTarget(OfflineDownloadRequest request) {
+    public DownloadTarget downloadTarget(OfflineDownloadRequest request) {
         validateUrl(request.url());
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), normalizeDriverType(config.driverType()));

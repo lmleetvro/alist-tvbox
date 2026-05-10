@@ -48,7 +48,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.core.io.ClassPathResource;
@@ -121,7 +120,7 @@ public class ShareService {
                         AListLocalService aListLocalService,
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
-                        @Lazy OfflineDownloadService offlineDownloadService,
+                        OfflineDownloadService offlineDownloadService,
                         RestTemplateBuilder builder,
                         Environment environment,
                         ObjectMapper objectMapper) {
@@ -425,7 +424,7 @@ public class ShareService {
                     } else {
                         share.setShareId(parts[1]);
                     }
-                    
+
                     // Special handling for STRM type (11:STRM)
                     if (share.getType() == 11 && "STRM".equals(share.getShareId())) {
                         // For STRM, parts[2] is the Base64 encoded cookie JSON
@@ -501,9 +500,9 @@ public class ShareService {
             if (share.isTemp()) {
                 continue;
             }
-            
+
             sb.append(getMountPath(share).replace(" ", "")).append("  ");
-            
+
             // Special handling for STRM type (type 11)
             if (share.getType() == 11) {
                 sb.append(share.getType()).append(":STRM").append("  ");
@@ -517,7 +516,7 @@ public class ShareService {
                         .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
                         .append(share.getPassword());
             }
-            
+
             sb.append("\n");
         }
 
@@ -1106,7 +1105,7 @@ public class ShareService {
                 throw new BadRequestException("分享ID不能为空");
             }
         }
-        
+
         // STRM 类型使用 cookie 字段存储配置 JSON
         if (share.getType() == 11) {
             if (StringUtils.isBlank(share.getCookie())) {
@@ -1142,7 +1141,7 @@ public class ShareService {
         if (share.getType() == 11) {
             return;
         }
-        
+
         if (StringUtils.isBlank(share.getFolderId())) {
             if (share.getType() == 3 || share.getType() == 5 || share.getType() == 7) {
                 share.setFolderId("0");

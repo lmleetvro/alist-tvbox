@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @RestController
@@ -24,7 +25,9 @@ public class PluginController {
 
     @GetMapping
     public List<Plugin> findAll() {
-        return pluginService.findAll();
+        return pluginService.findAll().stream()
+                .peek(e -> e.setLastCheckedAt(e.getLastCheckedAt().truncatedTo(ChronoUnit.SECONDS)))
+                .toList();
     }
 
     @PostMapping

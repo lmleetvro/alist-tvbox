@@ -612,6 +612,14 @@ public class SubscriptionService {
             config.put("headers", List.of(buildHeader("img\\d+.doubanio.com")));
         }
 
+        if (config.containsKey("parses")) {
+            List<Map<String, Object>> parses = new ArrayList<>((List<Map<String, Object>>) config.get("parses"));
+            parses.addFirst(addXiaMi());
+            config.put("parses", parses);
+        } else {
+            config.put("parses", List.of(addXiaMi()));
+        }
+
 //        addRules(config);
 
         log.debug("{} {}", apiUrl, config);
@@ -620,6 +628,14 @@ public class SubscriptionService {
 
     private Map<String, Object> buildHeader(String host) {
         return Map.of("host", host, "header", Map.of("Referer", "https://movie.douban.com"));
+    }
+
+    private Map<String, Object> addXiaMi() {
+        return buildParse("虾米", "https://jx.xmflv.com/?url=", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.57");
+    }
+
+    private Map<String, Object> buildParse(String name, String url, String userAgent) {
+        return Map.of("name", name, "url", url, "type", 0, "ext", Map.of("header", Map.of("User-Agent", userAgent)));
     }
 
     private void replaceAliToken(Map<String, Object> config) {

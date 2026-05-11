@@ -30,6 +30,7 @@ public class MovieDetail {
     private Long size;
     private CategoryList cate;
     private List<Video> items = new ArrayList<>();
+    private Object ext;
 
     @Override
     public boolean equals(Object o) {

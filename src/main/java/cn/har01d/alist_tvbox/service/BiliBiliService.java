@@ -681,11 +681,16 @@ public class BiliBiliService {
             String time = "发布于" + Instant.ofEpochSecond(info.getPubdate()).atZone(ZoneId.systemDefault()).toLocalDateTime();
             time = time.replace("T", " ");
             if (info.getStat() != null) {
-                String stat = info.getStat().getCoin() + "投币; "
-                        + info.getStat().getLike() + "点赞; "
-                        + info.getStat().getFavorite() + "收藏; "
-                        + info.getStat().getDanmaku() + "弹幕";
-                movieDetail.setVod_content(time + "; " + info.getDesc() + "; " + stat);
+                if ("gui".equals(client)) {
+                    movieDetail.setExt(info.getStat());
+                    movieDetail.setVod_content(time + "; " + info.getDesc());
+                } else {
+                    String stat = info.getStat().getCoin() + "投币; "
+                            + info.getStat().getLike() + "点赞; "
+                            + info.getStat().getFavorite() + "收藏; "
+                            + info.getStat().getDanmaku() + "弹幕";
+                    movieDetail.setVod_content(time + "; " + info.getDesc() + "; " + stat);
+                }
             } else {
                 movieDetail.setVod_content(time + info.getDesc());
             }

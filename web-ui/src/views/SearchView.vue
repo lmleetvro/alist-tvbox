@@ -101,7 +101,7 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 
-const type = ref('1')
+const type = ref(localStorage.getItem("search_type") || '1');
 const keyword = ref('')
 const config = ref<any>('')
 const dialogVisible = ref(false)
@@ -133,6 +133,7 @@ const getPath = (type: string) => {
 }
 
 const search = function () {
+  localStorage.setItem('search_type', type.value)
   if (!keyword.value) {
     return
   }

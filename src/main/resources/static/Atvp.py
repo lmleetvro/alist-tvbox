@@ -614,7 +614,6 @@ class Spider(HostSpider):
         return vod
 
     def _normalize_category_content(self, result):
-        print(result)
         if not isinstance(result, dict):
             return result
         vod_list = result.get("list")
@@ -661,7 +660,10 @@ class Spider(HostSpider):
 
     def searchContent(self, key, quick, pg="1"):
         print('searchContent', key, quick, pg)
-        return self._require_inner().searchContent(key, quick, int(pg))
+        result = self._require_inner().searchContent(key, quick, int(pg))
+        if not self._category_mode_enabled():
+            return result
+        return self._normalize_category_content(result)
 
     def _is_qqmusic_qrc_xml(self, text):
         value = str(text or "").strip()

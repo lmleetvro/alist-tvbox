@@ -294,7 +294,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="pluginVisible" title="插件管理" width="80%">
+    <el-dialog v-model="pluginVisible" title="插件管理" fullscreen>
       <el-form :inline="true" :model="pluginForm">
         <el-form-item label="地址" required>
           <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt"/>
@@ -312,7 +312,7 @@
           <el-input
             v-model="pluginImportForm.url"
             style="width: 460px"
-            placeholder="https://github.com/xxx/tvbox 或 spiders.json 地址"
+            placeholder="https://github.com/xxx/tvbox 或 spiders_v2.json 地址"
           />
         </el-form-item>
         <el-form-item>
@@ -320,7 +320,26 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%">
+      <el-form :inline="true" :model="pluginSettingsForm">
+        <el-form-item label="GitHub代理">
+          <el-input
+            v-model="pluginSettingsForm.githubProxy"
+            style="width: 460px"
+            placeholder="https://gh-proxy.org/"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="saveGithubProxy">保存代理</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="danger" :disabled="selectedPluginIds.length === 0" @click="deleteSelectedPlugins">
+            批量删除
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
+        <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
           <template #default="scope">
             <span class="pointer">{{ scope.row.sortOrder }}</span>
@@ -464,6 +483,10 @@ const pluginForm = ref<Plugin>({
 const pluginImportForm = ref({
   url: ''
 })
+const pluginSettingsForm = ref({
+  githubProxy: ''
+})
+const selectedPluginIds = ref<number[]>([])
 let timer = 0
 let pluginSortable: Sortable | null = null
 
@@ -590,11 +613,19 @@ const loadPlugins = () => {
   })
 }
 
+const loadPluginSettings = () => {
+  axios.get('/api/settings/github_proxy').then(({data}) => {
+    pluginSettingsForm.value.githubProxy = data?.value || ''
+  })
+}
+
 const showPlugins = () => {
   pluginVisible.value = true
   resetPluginForm()
   pluginImportForm.value.url = ''
+  selectedPluginIds.value = []
   loadPlugins()
+  loadPluginSettings()
 }
 
 const addPlugin = () => {
@@ -615,6 +646,29 @@ const importPlugins = () => {
     const action = data.failedCount > 0 ? ElMessage.warning : ElMessage.success
     action(`导入完成，新增 ${data.createdCount}，刷新 ${data.refreshedCount}，跳过 ${data.skippedCount}，失败 ${data.failedCount}`)
     pluginImportForm.value.url = ''
+    loadPlugins()
+  })
+}
+
+const saveGithubProxy = () => {
+  axios.post('/api/settings', {
+    name: 'github_proxy',
+    value: pluginSettingsForm.value.githubProxy
+  }).then(() => {
+    ElMessage.success('GitHub 代理已保存')
+  })
+}
+
+const onPluginSelectionChange = (rows: Plugin[]) => {
+  selectedPluginIds.value = rows.map(item => item.id)
+}
+
+const deleteSelectedPlugins = () => {
+  axios.post('/api/plugins/delete-batch', {
+    ids: selectedPluginIds.value
+  }).then(({data}) => {
+    ElMessage.success(`已删除 ${data} 个插件`)
+    selectedPluginIds.value = []
     loadPlugins()
   })
 }

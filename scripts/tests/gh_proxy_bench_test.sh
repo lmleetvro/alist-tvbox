@@ -59,15 +59,16 @@ test_parse_nodes_rejects_bad_payload() {
   assert_eq "" "$actual" "parse_nodes_from_payload should emit nothing for unusable payloads"
 }
 
-test_discover_nodes_falls_back_to_pool() {
+test_discover_nodes_uses_embedded_payload_without_curl() {
   local actual expected
   curl() {
-    return 22
+    printf 'ASSERT FAIL: discover_nodes should not call curl\n' >&2
+    exit 1
   }
 
   actual="$(discover_nodes)"
-  expected=$'默认节点\tgh.llkk.cc\n备用节点\tgh-proxy.org\n备用节点\thk.gh-proxy.org\n备用节点\tcdn.gh-proxy.org\n备用节点\tedgeone.gh-proxy.org\n备用节点\tgh.felicity.ac.cn'
-  assert_eq "$expected" "$actual" "discover_nodes should return the full fallback pool when API discovery fails"
+  expected="$(parse_nodes_from_payload "$(embedded_nodes_payload)")"
+  assert_eq "$expected" "$actual" "discover_nodes should return nodes from the embedded payload"
 }
 
 test_parse_curl_success_metrics() {
@@ -132,6 +133,10 @@ test_render_json_report() {
     printf 'ASSERT FAIL: render_json_report should include target_url\n' >&2
     exit 1
   }
+  [[ "$output" == *'"discovery_api": "embedded://gh-proxy-nodes-2026-05-12"'* ]] || {
+    printf 'ASSERT FAIL: render_json_report should include embedded discovery source\n' >&2
+    exit 1
+  }
   [[ "$output" == *'"host": "gh.llkk.cc"'* ]] || {
     printf 'ASSERT FAIL: render_json_report should include success host\n' >&2
     exit 1
@@ -148,7 +153,7 @@ test_fallback_nodes
 test_sort_success_rows
 test_parse_nodes_with_jq_or_python
 test_parse_nodes_rejects_bad_payload
-test_discover_nodes_falls_back_to_pool
+test_discover_nodes_uses_embedded_payload_without_curl
 test_parse_curl_success_metrics
 test_parse_curl_failure_metrics
 test_print_success_table

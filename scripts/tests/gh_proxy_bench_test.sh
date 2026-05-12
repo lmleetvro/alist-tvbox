@@ -102,6 +102,35 @@ test_print_failure_table() {
   }
 }
 
+test_result_file_path() {
+  local path
+  path="$(result_file_path)"
+  assert_eq \
+    "$ROOT_DIR/scripts/gh_proxy_bench_result.json" \
+    "$path" \
+    "result_file_path should resolve the fixed JSON output next to the script"
+}
+
+test_render_json_report() {
+  local success_rows failure_rows output
+  success_rows=$'默认节点\tgh.llkk.cc\t200\t0.123\t0.456\thttps://gh.llkk.cc/example'
+  failure_rows=$'ghpr.cc\thttp_404'
+  output="$(render_json_report "2026-05-12T18:00:00+08:00" "$success_rows" "$failure_rows")"
+
+  [[ "$output" == *'"target_url": "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json"'* ]] || {
+    printf 'ASSERT FAIL: render_json_report should include target_url\n' >&2
+    exit 1
+  }
+  [[ "$output" == *'"host": "gh.llkk.cc"'* ]] || {
+    printf 'ASSERT FAIL: render_json_report should include success host\n' >&2
+    exit 1
+  }
+  [[ "$output" == *'"reason": "http_404"'* ]] || {
+    printf 'ASSERT FAIL: render_json_report should include failure reason\n' >&2
+    exit 1
+  }
+}
+
 test_build_proxy_url
 test_normalize_label
 test_fallback_nodes
@@ -112,5 +141,7 @@ test_parse_curl_success_metrics
 test_parse_curl_failure_metrics
 test_print_success_table
 test_print_failure_table
+test_result_file_path
+test_render_json_report
 
 printf 'gh_proxy_bench tests: PASS\n'

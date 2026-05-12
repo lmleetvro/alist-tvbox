@@ -25,7 +25,13 @@ normalize_label() {
 }
 
 fallback_nodes() {
-  printf '默认节点\tgh.llkk.cc\n'
+  printf '%s\n' \
+    $'默认节点\tgh.llkk.cc' \
+    $'备用节点\tgh-proxy.org' \
+    $'备用节点\thk.gh-proxy.org' \
+    $'备用节点\tcdn.gh-proxy.org' \
+    $'备用节点\tedgeone.gh-proxy.org' \
+    $'备用节点\tgh.felicity.ac.cn'
 }
 
 build_proxy_url() {

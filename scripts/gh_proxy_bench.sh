@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly GH_PROXY_API_URL="https://api.akams.cn/github"
+readonly GH_PROXY_TARGET_URL="https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json"
+
+normalize_label() {
+  local host="$1"
+  local tag="${2:-}"
+  if [[ "$host" == "gh.llkk.cc" ]]; then
+    printf '默认节点\n'
+  elif [[ "$tag" == "donate" ]]; then
+    printf '公益贡献\n'
+  else
+    printf '%s\n' "${tag:-未命名节点}"
+  fi
+}
+
+fallback_nodes() {
+  printf '默认节点\tgh.llkk.cc\n'
+}
+
+build_proxy_url() {
+  local host="$1"
+  printf 'https://%s/%s\n' "$host" "$GH_PROXY_TARGET_URL"
+}
+
+sort_success_rows() {
+  sort -t $'\t' -k4,4n -k5,5n -k2,2
+}
+
+parse_nodes_with_jq() {
+  local payload="$1"
+  jq -r '
+    if (.code == 200 and (.data | type == "array")) then
+      .data[]
+      | select(.url? and (.url | type == "string"))
+      | [.url, (.tag // "")]
+      | @tsv
+    else
+      empty
+    end
+  ' <<<"$payload" | while IFS=$'\t' read -r raw_url raw_tag; do
+    local host
+    host="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$raw_url")"
+    [[ -n "$host" ]] || continue
+    printf '%s\t%s\n' "$(normalize_label "$host" "$raw_tag")" "$host"
+  done | awk -F '\t' '!seen[$2]++'
+}
+
+parse_nodes_with_python() {
+  local payload="$1"
+  python3 - "$payload" <<'PY'
+import json
+import sys
+from urllib.parse import urlparse
+
+payload = json.loads(sys.argv[1])
+if payload.get("code") != 200 or not isinstance(payload.get("data"), list):
+    raise SystemExit(0)
+
+seen = set()
+for item in payload["data"]:
+    raw_url = item.get("url")
+    if not isinstance(raw_url, str):
+        continue
+    host = urlparse(raw_url).hostname or ""
+    if not host or host in seen:
+        continue
+    seen.add(host)
+    tag = item.get("tag") or ""
+    print(f"{tag}\t{host}")
+PY
+}
+
+parse_nodes_from_payload() {
+  local payload="$1"
+  local rows=""
+  if command -v jq >/dev/null 2>&1; then
+    rows="$(parse_nodes_with_jq "$payload")"
+  else
+    rows="$(
+      parse_nodes_with_python "$payload" | while IFS=$'\t' read -r raw_tag host; do
+        printf '%s\t%s\n' "$(normalize_label "$host" "$raw_tag")" "$host"
+      done
+    )"
+  fi
+
+  if [[ -n "$rows" ]]; then
+    printf '%s\n' "$rows" | awk 'NF > 0'
+  fi
+}
+
+discover_nodes() {
+  local payload rows
+  if payload="$(curl --location --silent --show-error --fail "$GH_PROXY_API_URL")"; then
+    rows="$(parse_nodes_from_payload "$payload" || true)"
+    if [[ -n "$rows" ]]; then
+      printf '%s\n' "$rows"
+      return 0
+    fi
+  fi
+
+  fallback_nodes
+}
+
+format_success_row() {
+  local label="$1"
+  local host="$2"
+  local metrics="$3"
+  local status ttfb total url
+  IFS=$'\t' read -r status ttfb total <<<"$metrics"
+  url="$(build_proxy_url "$host")"
+  printf '%s\t%s\t%s\t%.3f\t%.3f\t%s\n' "$label" "$host" "$status" "$ttfb" "$total" "$url"
+}
+
+format_failure_row() {
+  local host="$1"
+  local reason="$2"
+  printf '%s\t%s\n' "$host" "$reason"
+}
+
+benchmark_host() {
+  local label="$1"
+  local host="$2"
+  local url curl_output curl_status status
+  url="$(build_proxy_url "$host")"
+
+  set +e
+  curl_output="$(
+    curl \
+      --location \
+      --silent \
+      --show-error \
+      --output /dev/null \
+      --connect-timeout 8 \
+      --max-time 30 \
+      --write-out $'%{http_code}\t%{time_starttransfer}\t%{time_total}' \
+      "$url" 2>&1
+  )"
+  curl_status=$?
+  set -e
+
+  if [[ $curl_status -ne 0 ]]; then
+    format_failure_row "$host" "curl_exit_${curl_status}"
+    return 1
+  fi
+
+  IFS=$'\t' read -r status _ <<<"$curl_output"
+  if [[ ! "$status" =~ ^[0-9]{3}$ ]] || (( status >= 400 )) || (( status < 200 )); then
+    format_failure_row "$host" "http_${status}"
+    return 1
+  fi
+
+  format_success_row "$label" "$host" "$curl_output"
+}
+
+print_success_table() {
+  local rows="$1"
+  printf 'Success Nodes\n'
+  printf '%-12s %-28s %-6s %-10s %-10s %s\n' "Label" "Host" "HTTP" "TTFB(s)" "Total(s)" "URL"
+  while IFS=$'\t' read -r label host status ttfb total url; do
+    [[ -n "${host:-}" ]] || continue
+    printf '%-12s %-28s %-6s %-10s %-10s %s\n' "$label" "$host" "$status" "$ttfb" "$total" "$url"
+  done <<<"$rows"
+}
+
+print_failure_table() {
+  local rows="$1"
+  [[ -n "$rows" ]] || return 0
+  printf '\nFailed Nodes\n'
+  printf '%-28s %s\n' "Host" "Reason"
+  while IFS=$'\t' read -r host reason; do
+    [[ -n "${host:-}" ]] || continue
+    printf '%-28s %s\n' "$host" "$reason"
+  done <<<"$rows"
+}
+
+main() {
+  local discovered row success_rows="" failure_rows=""
+  discovered="$(discover_nodes)"
+
+  while IFS=$'\t' read -r label host; do
+    [[ -n "${host:-}" ]] || continue
+    if row="$(benchmark_host "$label" "$host")"; then
+      success_rows+="${row}"$'\n'
+    else
+      failure_rows+="${row}"$'\n'
+    fi
+  done <<<"$discovered"
+
+  if [[ -n "$success_rows" ]]; then
+    success_rows="$(printf '%s' "$success_rows" | awk 'NF > 0' | sort_success_rows)"
+    print_success_table "$success_rows"
+  else
+    printf 'No successful proxy nodes.\n'
+  fi
+
+  print_failure_table "$(printf '%s' "$failure_rows" | awk 'NF > 0')"
+}
+
+if [[ "${GH_PROXY_BENCH_SOURCE_ONLY:-0}" != "1" ]]; then
+  main "$@"
+fi

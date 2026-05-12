@@ -4,6 +4,14 @@ set -euo pipefail
 readonly GH_PROXY_API_URL="https://api.akams.cn/github"
 readonly GH_PROXY_TARGET_URL="https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json"
 
+script_dir() {
+  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+}
+
+result_file_path() {
+  printf '%s/gh_proxy_bench_result.json\n' "$(script_dir)"
+}
+
 normalize_label() {
   local host="$1"
   local tag="${2:-}"
@@ -176,8 +184,65 @@ print_failure_table() {
   done <<<"$rows"
 }
 
+render_json_report() {
+  local generated_at="$1"
+  local success_rows="$2"
+  local failure_rows="$3"
+
+  python3 - "$generated_at" "$GH_PROXY_TARGET_URL" "$GH_PROXY_API_URL" "$success_rows" "$failure_rows" <<'PY'
+import json
+import sys
+
+generated_at, target_url, discovery_api, success_rows, failure_rows = sys.argv[1:6]
+
+success_nodes = []
+for line in success_rows.splitlines():
+    if not line.strip():
+        continue
+    label, host, status, ttfb, total, benchmark_url = line.split("\t")
+    success_nodes.append({
+        "label": label,
+        "host": host,
+        "http_status": int(status),
+        "ttfb_seconds": float(ttfb),
+        "total_seconds": float(total),
+        "benchmark_url": benchmark_url,
+    })
+
+failed_nodes = []
+for line in failure_rows.splitlines():
+    if not line.strip():
+        continue
+    host, reason = line.split("\t", 1)
+    failed_nodes.append({
+        "host": host,
+        "reason": reason,
+    })
+
+print(json.dumps({
+    "generated_at": generated_at,
+    "target_url": target_url,
+    "discovery_api": discovery_api,
+    "success_nodes": success_nodes,
+    "failed_nodes": failed_nodes,
+}, ensure_ascii=False, indent=2))
+PY
+}
+
+write_json_report() {
+  local generated_at="$1"
+  local success_rows="$2"
+  local failure_rows="$3"
+  local output_path tmp_file
+
+  output_path="$(result_file_path)"
+  tmp_file="$(mktemp "${output_path}.tmp.XXXXXX")"
+  render_json_report "$generated_at" "$success_rows" "$failure_rows" >"$tmp_file"
+  mv "$tmp_file" "$output_path"
+}
+
 main() {
-  local discovered row success_rows="" failure_rows=""
+  local discovered row success_rows="" failure_rows="" generated_at
   discovered="$(discover_nodes)"
 
   while IFS=$'\t' read -r label host; do
@@ -189,14 +254,20 @@ main() {
     fi
   done <<<"$discovered"
 
+  success_rows="$(printf '%s' "$success_rows" | awk 'NF > 0')"
+  failure_rows="$(printf '%s' "$failure_rows" | awk 'NF > 0')"
+
   if [[ -n "$success_rows" ]]; then
-    success_rows="$(printf '%s' "$success_rows" | awk 'NF > 0' | sort_success_rows)"
+    success_rows="$(printf '%s\n' "$success_rows" | sort_success_rows)"
     print_success_table "$success_rows"
   else
     printf 'No successful proxy nodes.\n'
   fi
 
-  print_failure_table "$(printf '%s' "$failure_rows" | awk 'NF > 0')"
+  print_failure_table "$failure_rows"
+
+  generated_at="$(date -Iseconds)"
+  write_json_report "$generated_at" "$success_rows" "$failure_rows"
 }
 
 if [[ "${GH_PROXY_BENCH_SOURCE_ONLY:-0}" != "1" ]]; then

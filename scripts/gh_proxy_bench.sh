@@ -123,7 +123,7 @@ format_failure_row() {
 benchmark_host() {
   local label="$1"
   local host="$2"
-  local url curl_output curl_status
+  local url curl_output curl_status status
   url="$(build_proxy_url "$host")"
 
   set +e
@@ -146,11 +146,57 @@ benchmark_host() {
     return 1
   fi
 
+  IFS=$'\t' read -r status _ <<<"$curl_output"
+  if [[ ! "$status" =~ ^[0-9]{3}$ ]] || (( status >= 400 )) || (( status < 200 )); then
+    format_failure_row "$host" "http_${status}"
+    return 1
+  fi
+
   format_success_row "$label" "$host" "$curl_output"
 }
 
+print_success_table() {
+  local rows="$1"
+  printf 'Success Nodes\n'
+  printf '%-12s %-28s %-6s %-10s %-10s %s\n' "Label" "Host" "HTTP" "TTFB(s)" "Total(s)" "URL"
+  while IFS=$'\t' read -r label host status ttfb total url; do
+    [[ -n "${host:-}" ]] || continue
+    printf '%-12s %-28s %-6s %-10s %-10s %s\n' "$label" "$host" "$status" "$ttfb" "$total" "$url"
+  done <<<"$rows"
+}
+
+print_failure_table() {
+  local rows="$1"
+  [[ -n "$rows" ]] || return 0
+  printf '\nFailed Nodes\n'
+  printf '%-28s %s\n' "Host" "Reason"
+  while IFS=$'\t' read -r host reason; do
+    [[ -n "${host:-}" ]] || continue
+    printf '%-28s %s\n' "$host" "$reason"
+  done <<<"$rows"
+}
+
 main() {
-  printf 'gh_proxy_bench skeleton\n'
+  local discovered row success_rows="" failure_rows=""
+  discovered="$(discover_nodes)"
+
+  while IFS=$'\t' read -r label host; do
+    [[ -n "${host:-}" ]] || continue
+    if row="$(benchmark_host "$label" "$host")"; then
+      success_rows+="${row}"$'\n'
+    else
+      failure_rows+="${row}"$'\n'
+    fi
+  done <<<"$discovered"
+
+  if [[ -n "$success_rows" ]]; then
+    success_rows="$(printf '%s' "$success_rows" | awk 'NF > 0' | sort_success_rows)"
+    print_success_table "$success_rows"
+  else
+    printf 'No successful proxy nodes.\n'
+  fi
+
+  print_failure_table "$(printf '%s' "$failure_rows" | awk 'NF > 0')"
 }
 
 if [[ "${GH_PROXY_BENCH_SOURCE_ONLY:-0}" != "1" ]]; then

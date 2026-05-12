@@ -74,6 +74,34 @@ test_parse_curl_failure_metrics() {
   assert_eq "$expected" "$actual" "format_failure_row should preserve host and failure reason"
 }
 
+test_print_success_table() {
+  local rows output
+  rows=$'默认节点\tgh.llkk.cc\t200\t0.123\t0.456\thttps://gh.llkk.cc/example'
+  output="$(print_success_table "$rows")"
+  [[ "$output" == *"Success Nodes"* ]] || {
+    printf 'ASSERT FAIL: print_success_table should print section title\n' >&2
+    exit 1
+  }
+  [[ "$output" == *"gh.llkk.cc"* ]] || {
+    printf 'ASSERT FAIL: print_success_table should include row host\n' >&2
+    exit 1
+  }
+}
+
+test_print_failure_table() {
+  local rows output
+  rows=$'gh.llkk.cc\tcurl_exit_28'
+  output="$(print_failure_table "$rows")"
+  [[ "$output" == *"Failed Nodes"* ]] || {
+    printf 'ASSERT FAIL: print_failure_table should print section title\n' >&2
+    exit 1
+  }
+  [[ "$output" == *"curl_exit_28"* ]] || {
+    printf 'ASSERT FAIL: print_failure_table should include failure reason\n' >&2
+    exit 1
+  }
+}
+
 test_build_proxy_url
 test_normalize_label
 test_fallback_nodes
@@ -82,5 +110,7 @@ test_parse_nodes_with_jq_or_python
 test_parse_nodes_rejects_bad_payload
 test_parse_curl_success_metrics
 test_parse_curl_failure_metrics
+test_print_success_table
+test_print_failure_table
 
 printf 'gh_proxy_bench tests: PASS\n'

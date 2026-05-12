@@ -29,6 +29,81 @@ sort_success_rows() {
   sort -t $'\t' -k4,4n -k5,5n -k2,2
 }
 
+parse_nodes_with_jq() {
+  local payload="$1"
+  jq -r '
+    if (.code == 200 and (.data | type == "array")) then
+      .data[]
+      | select(.url? and (.url | type == "string"))
+      | [.url, (.tag // "")]
+      | @tsv
+    else
+      empty
+    end
+  ' <<<"$payload" | while IFS=$'\t' read -r raw_url raw_tag; do
+    local host
+    host="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).hostname or "")' "$raw_url")"
+    [[ -n "$host" ]] || continue
+    printf '%s\t%s\n' "$(normalize_label "$host" "$raw_tag")" "$host"
+  done | awk -F '\t' '!seen[$2]++'
+}
+
+parse_nodes_with_python() {
+  local payload="$1"
+  python3 - "$payload" <<'PY'
+import json
+import sys
+from urllib.parse import urlparse
+
+payload = json.loads(sys.argv[1])
+if payload.get("code") != 200 or not isinstance(payload.get("data"), list):
+    raise SystemExit(0)
+
+seen = set()
+for item in payload["data"]:
+    raw_url = item.get("url")
+    if not isinstance(raw_url, str):
+        continue
+    host = urlparse(raw_url).hostname or ""
+    if not host or host in seen:
+        continue
+    seen.add(host)
+    tag = item.get("tag") or ""
+    print(f"{tag}\t{host}")
+PY
+}
+
+parse_nodes_from_payload() {
+  local payload="$1"
+  local rows=""
+  if command -v jq >/dev/null 2>&1; then
+    rows="$(parse_nodes_with_jq "$payload")"
+  else
+    rows="$(
+      parse_nodes_with_python "$payload" | while IFS=$'\t' read -r raw_tag host; do
+        printf '%s\t%s\n' "$(normalize_label "$host" "$raw_tag")" "$host"
+      done
+    )"
+  fi
+
+  if [[ -n "$rows" ]]; then
+    printf '%s\n' "$rows" | awk 'NF > 0'
+  fi
+}
+
+discover_nodes() {
+  local payload rows
+  if payload="$(curl --location --silent --show-error --fail "$GH_PROXY_API_URL")"; then
+    rows="$(parse_nodes_from_payload "$payload" || true)"
+    if [[ -n "$rows" ]]; then
+      printf '%s\n' "$rows"
+      return 0
+    fi
+  fi
+
+  fallback_nodes
+}
+
 main() {
   printf 'gh_proxy_bench skeleton\n'
 }

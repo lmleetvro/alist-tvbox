@@ -45,9 +45,25 @@ test_sort_success_rows() {
   assert_eq "$expected" "$actual" "sort_success_rows should order by starttransfer then total then host"
 }
 
+test_parse_nodes_with_jq_or_python() {
+  local payload actual expected
+  payload='{"code":200,"data":[{"url":"https://gh.llkk.cc/https://github.com/example","tag":"donate"},{"url":"https://edgeone.gh-proxy.org/https://github.com/example","tag":"search"},{"url":"https://gh.llkk.cc/https://github.com/example","tag":"duplicate"}]}'
+  expected=$'默认节点\tgh.llkk.cc\nsearch\tedgeone.gh-proxy.org'
+  actual="$(parse_nodes_from_payload "$payload")"
+  assert_eq "$expected" "$actual" "parse_nodes_from_payload should extract unique hosts and normalized labels"
+}
+
+test_parse_nodes_rejects_bad_payload() {
+  local actual
+  actual="$(parse_nodes_from_payload '{"code":500,"data":[]}' || true)"
+  assert_eq "" "$actual" "parse_nodes_from_payload should emit nothing for unusable payloads"
+}
+
 test_build_proxy_url
 test_normalize_label
 test_fallback_nodes
 test_sort_success_rows
+test_parse_nodes_with_jq_or_python
+test_parse_nodes_rejects_bad_payload
 
 printf 'gh_proxy_bench tests: PASS\n'

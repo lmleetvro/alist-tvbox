@@ -313,12 +313,16 @@
             v-model="pluginImportForm.url"
             style="width: 460px"
             placeholder="https://github.com/xxx/tvbox 或 spiders_v2.json 地址"
+            :disabled="importingPlugins"
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="importPlugins">导入仓库</el-button>
+          <el-button type="primary" :loading="importingPlugins" :disabled="!pluginImportForm.url.trim()" @click="importPlugins">
+            导入仓库
+          </el-button>
         </el-form-item>
       </el-form>
+      <el-progress v-if="importingPlugins" :percentage="100" :indeterminate="true" :duration="5"/>
 
       <el-form :inline="true" :model="pluginSettingsForm">
         <el-form-item label="GitHub代理">
@@ -355,6 +359,7 @@
             <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
           </template>
         </el-table-column>
+        <el-table-column prop="version" label="版本" width="90"/>
         <el-table-column prop="enabled" label="启用" width="90">
           <template #default="scope">
             <el-switch v-model="scope.row.enabled" @change="updatePlugin(scope.row)"/>
@@ -365,7 +370,11 @@
             <el-input v-model="scope.row.extend" @change="updatePlugin(scope.row)"/>
           </template>
         </el-table-column>
-        <el-table-column prop="lastCheckedAt" label="最近检查" width="180"/>
+        <el-table-column label="最近检查" width="180">
+          <template #default="scope">
+            <span>{{ formatPluginCheckedAt(scope.row.lastCheckedAt) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="lastError" label="状态" width="180">
           <template #default="scope">
             <span>{{ scope.row.lastError || '正常' }}</span>
@@ -384,10 +393,9 @@
 </template>
 
 <script setup lang="ts">
-import {nextTick, onMounted, ref} from 'vue'
+import {nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
-import {onUnmounted} from "@vue/runtime-core";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 
@@ -402,12 +410,14 @@ interface Plugin {
   url: string
   enabled: boolean
   sortOrder: number
+  version: number | null
   extend: string
   sourceName: string
   lastCheckedAt: string
   lastError: string
 }
 
+const PLUGIN_REPO_URL_KEY = 'plugin_repo_url'
 const currentUrl = window.location.origin
 const tgPhase = ref(0)
 const tgPhone = ref('')
@@ -432,6 +442,7 @@ const detailVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const pluginVisible = ref(false)
+const importingPlugins = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
@@ -475,13 +486,14 @@ const pluginForm = ref<Plugin>({
   url: '',
   enabled: true,
   sortOrder: 0,
+  version: null,
   extend: '',
   sourceName: '',
   lastCheckedAt: '',
   lastError: ''
 })
 const pluginImportForm = ref({
-  url: ''
+  url: localStorage.getItem(PLUGIN_REPO_URL_KEY) || ''
 })
 const pluginSettingsForm = ref({
   githubProxy: ''
@@ -573,11 +585,25 @@ const resetPluginForm = () => {
     url: '',
     enabled: true,
     sortOrder: 0,
+    version: null,
     extend: '',
     sourceName: '',
     lastCheckedAt: '',
     lastError: ''
   }
+}
+
+const padTimePart = (value: number) => value.toString().padStart(2, '0')
+
+const formatPluginCheckedAt = (value: string) => {
+  if (!value) {
+    return ''
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value.replace('T', ' ').replace(/(?:Z|[+-]\d{2}:\d{2})$/, '')
+  }
+  return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())} ${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`
 }
 
 const enablePluginRowDrop = () => {
@@ -622,7 +648,7 @@ const loadPluginSettings = () => {
 const showPlugins = () => {
   pluginVisible.value = true
   resetPluginForm()
-  pluginImportForm.value.url = ''
+  pluginImportForm.value.url = localStorage.getItem(PLUGIN_REPO_URL_KEY) || ''
   selectedPluginIds.value = []
   loadPlugins()
   loadPluginSettings()
@@ -639,15 +665,22 @@ const addPlugin = () => {
   })
 }
 
-const importPlugins = () => {
-  axios.post('/api/plugins/import', {
-    url: pluginImportForm.value.url
-  }).then(({data}) => {
+const importPlugins = async () => {
+  const url = pluginImportForm.value.url.trim()
+  if (!url) {
+    return
+  }
+  importingPlugins.value = true
+  try {
+    const {data} = await axios.post('/api/plugins/import', {
+      url
+    })
     const action = data.failedCount > 0 ? ElMessage.warning : ElMessage.success
     action(`导入完成，新增 ${data.createdCount}，刷新 ${data.refreshedCount}，跳过 ${data.skippedCount}，失败 ${data.failedCount}`)
-    pluginImportForm.value.url = ''
     loadPlugins()
-  })
+  } finally {
+    importingPlugins.value = false
+  }
 }
 
 const saveGithubProxy = () => {
@@ -864,6 +897,10 @@ const loadVersion = () => {
     zxRemote2.value = data.remote2
   })
 }
+
+watch(() => pluginImportForm.value.url, (value) => {
+  localStorage.setItem(PLUGIN_REPO_URL_KEY, value)
+})
 
 onMounted(() => {
   axios.get('/api/token').then(({data}) => {

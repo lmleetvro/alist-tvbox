@@ -34,7 +34,7 @@ test_normalize_label() {
 test_fallback_nodes() {
   local actual
   actual="$(fallback_nodes)"
-  assert_eq $'默认节点\tgh.llkk.cc' "$actual" "fallback_nodes should expose the built-in fallback host"
+  assert_eq $'默认节点\tgh.llkk.cc\n备用节点\tgh-proxy.org\n备用节点\thk.gh-proxy.org\n备用节点\tcdn.gh-proxy.org\n备用节点\tedgeone.gh-proxy.org\n备用节点\tgh.felicity.ac.cn' "$actual" "fallback_nodes should expose the full built-in fallback pool"
 }
 
 test_sort_success_rows() {
@@ -57,6 +57,17 @@ test_parse_nodes_rejects_bad_payload() {
   local actual
   actual="$(parse_nodes_from_payload '{"code":500,"data":[]}' || true)"
   assert_eq "" "$actual" "parse_nodes_from_payload should emit nothing for unusable payloads"
+}
+
+test_discover_nodes_falls_back_to_pool() {
+  local actual expected
+  curl() {
+    return 22
+  }
+
+  actual="$(discover_nodes)"
+  expected=$'默认节点\tgh.llkk.cc\n备用节点\tgh-proxy.org\n备用节点\thk.gh-proxy.org\n备用节点\tcdn.gh-proxy.org\n备用节点\tedgeone.gh-proxy.org\n备用节点\tgh.felicity.ac.cn'
+  assert_eq "$expected" "$actual" "discover_nodes should return the full fallback pool when API discovery fails"
 }
 
 test_parse_curl_success_metrics() {
@@ -137,6 +148,7 @@ test_fallback_nodes
 test_sort_success_rows
 test_parse_nodes_with_jq_or_python
 test_parse_nodes_rejects_bad_payload
+test_discover_nodes_falls_back_to_pool
 test_parse_curl_success_metrics
 test_parse_curl_failure_metrics
 test_print_success_table

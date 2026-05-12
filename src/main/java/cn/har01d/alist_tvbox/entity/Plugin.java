@@ -48,6 +48,9 @@ public class Plugin {
     @Column(columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "`version`")
+    private Integer version;
+
     @Column(name = "last_checked_at")
     private OffsetDateTime lastCheckedAt;
 

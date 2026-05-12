@@ -22,6 +22,9 @@ public class PluginController {
     private record PluginImportRequest(String url) {
     }
 
+    private record PluginBatchDeleteRequest(List<Integer> ids) {
+    }
+
     public PluginController(PluginService pluginService) {
         this.pluginService = pluginService;
     }
@@ -61,5 +64,10 @@ public class PluginController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Integer id) {
         pluginService.delete(id);
+    }
+
+    @PostMapping("/delete-batch")
+    public int deleteBatch(@RequestBody PluginBatchDeleteRequest request) {
+        return pluginService.deleteBatch(request.ids());
     }
 }

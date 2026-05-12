@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import cn.har01d.alist_tvbox.entity.Plugin;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
@@ -21,6 +27,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,9 +38,13 @@ class PluginServiceTest {
     @Mock
     private PluginRepository pluginRepository;
     @Mock
+    private SettingRepository settingRepository;
+    @Mock
     private RestTemplate restTemplate;
     @Mock
     private RestTemplateBuilder builder;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -40,7 +53,8 @@ class PluginServiceTest {
     @BeforeEach
     void setUp() {
         when(builder.build()).thenReturn(restTemplate);
-        pluginService = new PluginService(pluginRepository, builder, objectMapper);
+        lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
+        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper, new TransactionTemplate(transactionManager));
     }
 
     @Test
@@ -49,8 +63,8 @@ class PluginServiceTest {
         plugin.setUrl("https://github.com/har01d5/tvbox/raw/refs/heads/master/py/4K%E6%8C%87%E5%8D%97.txt");
 
         when(pluginRepository.findByUrl(plugin.getUrl())).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("plugin-body");
-        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of());
+        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("//@version:4\nplugin-body");
+        when(pluginRepository.count()).thenReturn(0L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> {
             Plugin saved = invocation.getArgument(0);
             if (saved.getId() == null) {
@@ -63,7 +77,8 @@ class PluginServiceTest {
 
         assertThat(saved.getName()).isEqualTo("4K指南");
         assertThat(saved.getSourceName()).isEqualTo("4K指南");
-        assertThat(saved.getContent()).isEqualTo("plugin-body");
+        assertThat(saved.getContent()).isEqualTo("//@version:4\nplugin-body");
+        assertThat(saved.getVersion()).isEqualTo(4);
         assertThat(saved.isEnabled()).isTrue();
         assertThat(saved.getSortOrder()).isEqualTo(1);
         assertThat(saved.getLastError()).isBlank();
@@ -91,16 +106,18 @@ class PluginServiceTest {
         plugin.setSourceName("4K指南");
         plugin.setUrl("https://example.com/4K%E6%8C%87%E5%8D%97.txt");
         plugin.setContent("old-body");
+        plugin.setVersion(4);
 
         when(pluginRepository.findById(9)).thenReturn(Optional.of(plugin));
-        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("new-body");
+        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("//@version:5\nnew-body");
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Plugin refreshed = pluginService.refresh(9);
 
         assertThat(refreshed.getName()).isEqualTo("我的4K源");
         assertThat(refreshed.getSourceName()).isEqualTo("4K指南");
-        assertThat(refreshed.getContent()).isEqualTo("new-body");
+        assertThat(refreshed.getContent()).isEqualTo("//@version:5\nnew-body");
+        assertThat(refreshed.getVersion()).isEqualTo(5);
         assertThat(refreshed.getLastError()).isBlank();
         assertThat(refreshed.getLastCheckedAt()).isNotNull();
     }
@@ -176,6 +193,69 @@ class PluginServiceTest {
     }
 
     @Test
+    void deleteShouldRenumberRemainingPlugins() {
+        Plugin deleted = new Plugin();
+        deleted.setId(22);
+        deleted.setSortOrder(2);
+        Plugin first = new Plugin();
+        first.setId(11);
+        first.setSortOrder(1);
+        Plugin third = new Plugin();
+        third.setId(33);
+        third.setSortOrder(3);
+
+        when(pluginRepository.findById(22)).thenReturn(Optional.of(deleted));
+        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(first, third));
+        when(pluginRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        pluginService.delete(22);
+
+        assertThat(first.getSortOrder()).isEqualTo(1);
+        assertThat(third.getSortOrder()).isEqualTo(2);
+        verify(pluginRepository).saveAll(List.of(first, third));
+    }
+
+    @Test
+    void deleteBatchShouldRemoveSelectedPluginsOnly() {
+        Plugin first = new Plugin();
+        first.setId(1);
+        Plugin second = new Plugin();
+        second.setId(2);
+
+        when(pluginRepository.findAllById(List.of(1, 2))).thenReturn(List.of(first, second));
+
+        int deleted = pluginService.deleteBatch(List.of(1, 2));
+
+        assertThat(deleted).isEqualTo(2);
+        verify(pluginRepository).deleteAll(List.of(first, second));
+    }
+
+    @Test
+    void deleteBatchShouldRenumberRemainingPlugins() {
+        Plugin first = new Plugin();
+        first.setId(1);
+        Plugin second = new Plugin();
+        second.setId(2);
+        Plugin remainingFirst = new Plugin();
+        remainingFirst.setId(4);
+        remainingFirst.setSortOrder(4);
+        Plugin remainingSecond = new Plugin();
+        remainingSecond.setId(6);
+        remainingSecond.setSortOrder(6);
+
+        when(pluginRepository.findAllById(List.of(1, 2))).thenReturn(List.of(first, second));
+        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(remainingFirst, remainingSecond));
+        when(pluginRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        int deleted = pluginService.deleteBatch(List.of(1, 2));
+
+        assertThat(deleted).isEqualTo(2);
+        assertThat(remainingFirst.getSortOrder()).isEqualTo(1);
+        assertThat(remainingSecond.getSortOrder()).isEqualTo(2);
+        verify(pluginRepository).saveAll(List.of(remainingFirst, remainingSecond));
+    }
+
+    @Test
     void reorderShouldRewriteSortOrderUsingIncomingIds() {
         Plugin first = new Plugin();
         first.setId(1);
@@ -196,7 +276,7 @@ class PluginServiceTest {
 
     @Test
     void importFromSpidersJsonShouldRefreshExistingPluginsAndCreateNewOnes() {
-        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders.json";
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
         String firstPlugin = "https://example.com/a.txt";
         String secondPlugin = "https://example.com/b.txt";
         String payload = """
@@ -218,7 +298,8 @@ class PluginServiceTest {
         when(pluginRepository.findByUrl(secondPlugin)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(firstPlugin), String.class)).thenReturn("new-a");
         when(restTemplate.getForObject(URI.create(secondPlugin), String.class)).thenReturn("body-b");
-        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(existing));
+        when(pluginRepository.findById(7)).thenReturn(Optional.of(existing));
+        when(pluginRepository.count()).thenReturn(1L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
@@ -237,13 +318,13 @@ class PluginServiceTest {
     @Test
     void importFromRepositoryUrlShouldResolveRootSpidersJson() {
         String repositoryUrl = "https://github.com/har01d5/tvbox";
-        String resolvedUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders.json";
+        String resolvedUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
         String pluginUrl = "https://example.com/demo.txt";
 
         when(restTemplate.getForObject(URI.create(resolvedUrl), String.class)).thenReturn("[\"" + pluginUrl + "\"]");
         when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
-        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of());
+        when(pluginRepository.count()).thenReturn(0L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(repositoryUrl);
@@ -253,15 +334,163 @@ class PluginServiceTest {
     }
 
     @Test
+    void createShouldUseGithubProxyForGithubUrlsWithoutChangingStoredUrl() {
+        String url = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/demo.txt";
+        String proxiedUrl = "https://gh-proxy.org/" + url;
+        Plugin plugin = new Plugin();
+        plugin.setUrl(url);
+
+        when(settingRepository.findById("github_proxy")).thenReturn(Optional.of(new Setting("github_proxy", "https://gh-proxy.org/")));
+        when(pluginRepository.findByUrl(url)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(proxiedUrl), String.class)).thenReturn("body");
+        when(pluginRepository.count()).thenReturn(0L);
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Plugin saved = pluginService.create(plugin);
+
+        assertThat(saved.getUrl()).isEqualTo(url);
+        verify(restTemplate).getForObject(URI.create(proxiedUrl), String.class);
+        verify(restTemplate, never()).getForObject(URI.create(url), String.class);
+    }
+
+    @Test
+    void importFromStringSpidersJsonShouldResolveRelativePathsAgainstRepositoryRoot() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/demo.txt";
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn("[\"py/demo.txt\"]");
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
+        when(pluginRepository.count()).thenReturn(0L);
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.created()).containsExactly("demo");
+    }
+
+    @Test
+    void importFromObjectSpidersJsonShouldUseFileFieldAndResolveRelativePaths() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String relativePluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/relative.txt";
+        String absolutePluginUrl = "https://example.com/absolute.txt";
+        String payload = """
+                [
+                  {"version": 1, "file": "py/relative.txt"},
+                  {"version": 2, "file": "https://example.com/absolute.txt"}
+                ]
+                """;
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByUrl(relativePluginUrl)).thenReturn(Optional.empty());
+        when(pluginRepository.findByUrl(absolutePluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(relativePluginUrl), String.class)).thenReturn("//@version:1\nrelative-body");
+        when(restTemplate.getForObject(URI.create(absolutePluginUrl), String.class)).thenReturn("//@version:2\nabsolute-body");
+        when(pluginRepository.count()).thenReturn(0L, 1L);
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.created()).containsExactly("relative", "absolute");
+    }
+
+    @Test
+    void importFromObjectSpidersJsonShouldCreateInvalidPluginAsDisabled() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/invalid.txt";
+        String payload = """
+                [
+                  {"version": 1, "valid": false, "file": "py/invalid.txt"}
+                ]
+                """;
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("//@version:1\ninvalid-body");
+        when(pluginRepository.count()).thenReturn(0L);
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.created()).containsExactly("invalid");
+        assertThat(result.failedCount()).isEqualTo(0);
+        verify(pluginRepository).save(argThat(plugin ->
+                plugin.getUrl().equals(pluginUrl)
+                        && !plugin.isEnabled()
+                        && Integer.valueOf(1).equals(plugin.getVersion())));
+    }
+
+    @Test
+    void importFromObjectSpidersJsonShouldKeepExistingEnabledStateWhenRefreshing() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/existing.txt";
+        String payload = """
+                [
+                  {"version": 2, "valid": false, "file": "py/existing.txt"}
+                ]
+                """;
+        Plugin existing = new Plugin();
+        existing.setId(13);
+        existing.setName("existing");
+        existing.setSourceName("existing");
+        existing.setUrl(pluginUrl);
+        existing.setVersion(1);
+        existing.setEnabled(true);
+        existing.setContent("old");
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.of(existing));
+        when(pluginRepository.findById(13)).thenReturn(Optional.of(existing));
+        when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("//@version:2\nnew-body");
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.refreshed()).containsExactly("existing");
+        assertThat(existing.isEnabled()).isTrue();
+        assertThat(existing.getVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void importFromObjectSpidersJsonShouldSkipRefreshWhenVersionMatches() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/relative.txt";
+        String payload = """
+                [
+                  {"version": 4, "file": "py/relative.txt"}
+                ]
+                """;
+        Plugin existing = new Plugin();
+        existing.setId(11);
+        existing.setName("relative");
+        existing.setSourceName("relative");
+        existing.setUrl(pluginUrl);
+        existing.setVersion(4);
+        existing.setContent("stable");
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.of(existing));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.createdCount()).isEqualTo(0);
+        assertThat(result.refreshedCount()).isEqualTo(0);
+        assertThat(result.skippedCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isEqualTo(0);
+        assertThat(existing.getContent()).isEqualTo("stable");
+        verify(restTemplate, never()).getForObject(URI.create(pluginUrl), String.class);
+    }
+
+    @Test
     void importFromSourceShouldRejectUnsupportedUrl() {
-        assertThatThrownBy(() -> pluginService.importFromSource("https://example.com/list.json"))
+        assertThatThrownBy(() -> pluginService.importFromSource("https://example.com/spiders.json"))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("不支持");
     }
 
     @Test
     void importFromSpidersJsonShouldReportFailedRefreshes() {
-        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders.json";
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
         String pluginUrl = "https://example.com/a.txt";
         Plugin existing = new Plugin();
         existing.setId(8);
@@ -271,6 +500,7 @@ class PluginServiceTest {
         existing.setContent("stable");
 
         when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.of(existing));
+        when(pluginRepository.findById(8)).thenReturn(Optional.of(existing));
         when(restTemplate.getForObject(any(URI.class), eq(String.class))).thenAnswer(invocation -> {
             URI uri = invocation.getArgument(0);
             if (URI.create(sourceUrl).equals(uri)) {

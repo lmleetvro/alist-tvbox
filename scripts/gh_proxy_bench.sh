@@ -104,6 +104,51 @@ discover_nodes() {
   fallback_nodes
 }
 
+format_success_row() {
+  local label="$1"
+  local host="$2"
+  local metrics="$3"
+  local status ttfb total url
+  IFS=$'\t' read -r status ttfb total <<<"$metrics"
+  url="$(build_proxy_url "$host")"
+  printf '%s\t%s\t%s\t%.3f\t%.3f\t%s\n' "$label" "$host" "$status" "$ttfb" "$total" "$url"
+}
+
+format_failure_row() {
+  local host="$1"
+  local reason="$2"
+  printf '%s\t%s\n' "$host" "$reason"
+}
+
+benchmark_host() {
+  local label="$1"
+  local host="$2"
+  local url curl_output curl_status
+  url="$(build_proxy_url "$host")"
+
+  set +e
+  curl_output="$(
+    curl \
+      --location \
+      --silent \
+      --show-error \
+      --output /dev/null \
+      --connect-timeout 8 \
+      --max-time 30 \
+      --write-out $'%{http_code}\t%{time_starttransfer}\t%{time_total}' \
+      "$url" 2>&1
+  )"
+  curl_status=$?
+  set -e
+
+  if [[ $curl_status -ne 0 ]]; then
+    format_failure_row "$host" "curl_exit_${curl_status}"
+    return 1
+  fi
+
+  format_success_row "$label" "$host" "$curl_output"
+}
+
 main() {
   printf 'gh_proxy_bench skeleton\n'
 }

@@ -59,11 +59,28 @@ test_parse_nodes_rejects_bad_payload() {
   assert_eq "" "$actual" "parse_nodes_from_payload should emit nothing for unusable payloads"
 }
 
+test_parse_curl_success_metrics() {
+  local metrics actual expected
+  metrics=$'200\t0.123456\t0.456789'
+  expected=$'默认节点\tgh.llkk.cc\t200\t0.123\t0.457\thttps://gh.llkk.cc/https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json'
+  actual="$(format_success_row "默认节点" "gh.llkk.cc" "$metrics")"
+  assert_eq "$expected" "$actual" "format_success_row should normalize curl metrics to 3 decimals"
+}
+
+test_parse_curl_failure_metrics() {
+  local actual expected
+  expected=$'gh.llkk.cc\tcurl_exit_28'
+  actual="$(format_failure_row "gh.llkk.cc" "curl_exit_28")"
+  assert_eq "$expected" "$actual" "format_failure_row should preserve host and failure reason"
+}
+
 test_build_proxy_url
 test_normalize_label
 test_fallback_nodes
 test_sort_success_rows
 test_parse_nodes_with_jq_or_python
 test_parse_nodes_rejects_bad_payload
+test_parse_curl_success_metrics
+test_parse_curl_failure_metrics
 
 printf 'gh_proxy_bench tests: PASS\n'

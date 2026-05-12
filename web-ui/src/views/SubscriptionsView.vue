@@ -296,7 +296,7 @@
 
     <el-dialog v-model="pluginVisible" title="插件管理" fullscreen>
       <el-form :inline="true" :model="pluginForm">
-        <el-form-item label="地址" required>
+        <el-form-item label="插件地址" required>
           <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt"/>
         </el-form-item>
         <el-form-item label="名称">
@@ -316,7 +316,7 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="importPlugins">导入仓库插件</el-button>
+          <el-button type="primary" @click="importPlugins">导入仓库</el-button>
         </el-form-item>
       </el-form>
 
@@ -325,7 +325,7 @@
           <el-input
             v-model="pluginSettingsForm.githubProxy"
             style="width: 460px"
-            placeholder="https://gh-proxy.org/"
+            placeholder="https://gh.llkk.cc/"
           />
         </el-form-item>
         <el-form-item>

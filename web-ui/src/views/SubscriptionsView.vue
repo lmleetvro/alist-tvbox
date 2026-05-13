@@ -343,14 +343,6 @@
         </el-form-item>
       </el-form>
 
-      <el-alert
-        v-if="!pluginDragEnabled"
-        class="plugin-drag-tip"
-        title="小屏幕不支持拖拽排序，请在大屏设备操作"
-        type="info"
-        :closable="false"
-      />
-
       <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
@@ -423,14 +415,6 @@
           </el-button>
         </el-form-item>
       </el-form>
-
-      <el-alert
-        v-if="!pluginDragEnabled"
-        class="plugin-drag-tip"
-        title="小屏幕不支持拖拽排序，请在大屏设备操作"
-        type="info"
-        :closable="false"
-      />
 
       <el-table
         :data="pluginFilters"
@@ -1285,10 +1269,6 @@ onUnmounted(() => {
 
 .order-text {
   cursor: default;
-}
-
-.plugin-drag-tip {
-  margin-bottom: 12px;
 }
 
 .json pre {

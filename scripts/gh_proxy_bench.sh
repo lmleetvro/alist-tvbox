@@ -50,24 +50,6 @@ embedded_nodes_payload() {
       "tag": "search"
     },
     {
-      "url": "https://ghpr.cc",
-      "server": "Apache",
-      "ip": "103.224.212.213",
-      "location": "Australia  ",
-      "latency": 227,
-      "speed": 7771.95,
-      "tag": "search"
-    },
-    {
-      "url": "https://gh-proxy.net",
-      "server": "Cowboy",
-      "ip": "5.79.75.212",
-      "location": "Netherlands  ",
-      "latency": 329,
-      "speed": 3263.35,
-      "tag": "donate"
-    },
-    {
       "url": "https://github.starrlzy.cn",
       "server": "nginx",
       "ip": "64.83.33.87",
@@ -140,15 +122,6 @@ embedded_nodes_payload() {
       "tag": "search"
     },
     {
-      "url": "https://ghproxy.net",
-      "server": "nginx",
-      "ip": "51.195.241.253",
-      "location": "France  ",
-      "latency": 315,
-      "speed": 1.44,
-      "tag": "donate"
-    },
-    {
       "url": "https://gh.nxnow.top",
       "server": "nginx/1.22.1",
       "ip": "141.140.15.12",
@@ -185,15 +158,6 @@ embedded_nodes_payload() {
       "tag": "donate"
     },
     {
-      "url": "https://git.669966.xyz",
-      "server": "cloudflare",
-      "ip": "172.67.161.66",
-      "location": "  ",
-      "latency": 420,
-      "speed": 1.01,
-      "tag": "search"
-    },
-    {
       "url": "https://ghfile.geekertao.top",
       "server": "cloudflare",
       "ip": "162.159.16.182",
@@ -221,15 +185,6 @@ embedded_nodes_payload() {
       "tag": "donate"
     },
     {
-      "url": "https://g.blfrp.cn",
-      "server": "nginx/1.14.1",
-      "ip": "138.2.49.211",
-      "location": "Japan Osaka Osaka",
-      "latency": 347,
-      "speed": 0.48,
-      "tag": "search"
-    },
-    {
       "url": "https://gitproxy.mrhjx.cn",
       "server": "cloudflare",
       "ip": "104.21.30.97",
@@ -237,33 +192,6 @@ embedded_nodes_payload() {
       "latency": 232,
       "speed": 0.44,
       "tag": "search"
-    },
-    {
-      "url": "http://gh.927223.xyz",
-      "server": "cloudflare",
-      "ip": "162.159.16.182",
-      "location": "  ",
-      "latency": 146,
-      "speed": 0.39,
-      "tag": "donate"
-    },
-    {
-      "url": "https://proxy.yaoyaoling.net",
-      "server": "nginx",
-      "ip": "107.148.2.84",
-      "location": "Japan Tokyo Tokyo",
-      "latency": 683,
-      "speed": 0.39,
-      "tag": "search"
-    },
-    {
-      "url": "https://gh.bugdey.us.kg",
-      "server": "cloudflare",
-      "ip": "162.159.40.183",
-      "location": "  ",
-      "latency": 96,
-      "speed": 0.37,
-      "tag": "donate"
     },
     {
       "url": "https://ghproxy.1888866.xyz",
@@ -302,15 +230,6 @@ embedded_nodes_payload() {
       "tag": "donate"
     },
     {
-      "url": "https://github.ednovas.xyz",
-      "server": "cloudflare",
-      "ip": "172.67.145.204",
-      "location": "  ",
-      "latency": 249,
-      "speed": 0.14,
-      "tag": "search"
-    },
-    {
       "url": "https://github-proxy.memory-echoes.cn",
       "server": "cloudflare",
       "ip": "172.67.171.163",
@@ -318,15 +237,6 @@ embedded_nodes_payload() {
       "latency": 189,
       "speed": 0.14,
       "tag": "donate"
-    },
-    {
-      "url": "https://github.xxlab.tech",
-      "server": "openresty",
-      "ip": "101.201.71.156",
-      "location": "中国 北京市 ",
-      "latency": 55,
-      "speed": 0.13,
-      "tag": "search"
     },
     {
       "url": "https://gh.jasonzeng.dev",
@@ -356,48 +266,12 @@ embedded_nodes_payload() {
       "tag": "donate"
     },
     {
-      "url": "https://gh.monlor.com",
-      "server": "cloudflare",
-      "ip": "104.26.4.9",
-      "location": "  ",
-      "latency": 257,
-      "speed": 0.1,
-      "tag": "search"
-    },
-    {
-      "url": "https://gh.ddlc.top",
-      "server": "cloudflare",
-      "ip": "104.19.89.51",
-      "location": "  ",
-      "latency": 202,
-      "speed": 0.09,
-      "tag": "search"
-    },
-    {
-      "url": "https://gh.catmak.name",
-      "server": "cloudflare",
-      "ip": "172.67.187.3",
-      "location": "  ",
-      "latency": 1235,
-      "speed": 0.08,
-      "tag": "donate"
-    },
-    {
       "url": "https://ghproxy.imciel.com",
       "server": "cloudflare",
       "ip": "104.21.75.115",
       "location": "  ",
       "latency": 260,
       "speed": 0.08,
-      "tag": "search"
-    },
-    {
-      "url": "https://free.cn.eu.org",
-      "server": "cloudflare",
-      "ip": "104.21.85.192",
-      "location": "  ",
-      "latency": 651,
-      "speed": 0.07,
       "tag": "search"
     },
     {
@@ -408,15 +282,6 @@ embedded_nodes_payload() {
       "latency": 340,
       "speed": 0.06,
       "tag": "donate"
-    },
-    {
-      "url": "https://ghpxy.hwinzniej.top",
-      "server": "cloudflare",
-      "ip": "172.67.197.49",
-      "location": "  ",
-      "latency": 268,
-      "speed": 0.06,
-      "tag": "search"
     },
     {
       "url": "https://gitproxy.127731.xyz",
@@ -437,47 +302,11 @@ embedded_nodes_payload() {
       "tag": "donate"
     },
     {
-      "url": "https://j.1win.ggff.net",
-      "server": "cloudflare",
-      "ip": "172.67.222.130",
-      "location": "  ",
-      "latency": 3015,
-      "speed": 0.05,
-      "tag": "donate"
-    },
-    {
-      "url": "https://github.geekery.cn",
-      "server": "cloudflare",
-      "ip": "172.67.154.5",
-      "location": "  ",
-      "latency": 230,
-      "speed": 0.05,
-      "tag": "search"
-    },
-    {
-      "url": "https://gp.zkitefly.eu.org",
-      "server": "cloudflare",
-      "ip": "172.67.214.122",
-      "location": "  ",
-      "latency": 268,
-      "speed": 0.04,
-      "tag": "search"
-    },
-    {
       "url": "https://ghproxy.cxkpro.top",
       "server": "cloudflare",
       "ip": "104.21.11.89",
       "location": "  ",
       "latency": 215,
-      "speed": 0.04,
-      "tag": "search"
-    },
-    {
-      "url": "https://ghp.keleyaa.com",
-      "server": "cloudflare",
-      "ip": "172.67.222.61",
-      "location": "  ",
-      "latency": 268,
       "speed": 0.04,
       "tag": "search"
     },
@@ -545,7 +374,7 @@ embedded_nodes_payload() {
       "tag": "donate"
     }
   ],
-  "total": 56,
+  "total": 37,
   "update_time": "2026-05-12 18:25:33"
 }
 JSON
@@ -558,6 +387,10 @@ build_proxy_url() {
 
 sort_success_rows() {
   sort -t $'\t' -k4,4n -k5,5n -k2,2
+}
+
+merge_node_rows() {
+  awk -F '\t' 'NF > 0 && !seen[$2]++'
 }
 
 parse_nodes_with_jq() {
@@ -623,10 +456,19 @@ parse_nodes_from_payload() {
 }
 
 discover_nodes() {
-  local rows
+  local rows merged_rows
   rows="$(parse_nodes_from_payload "$(embedded_nodes_payload)" || true)"
-  if [[ -n "$rows" ]]; then
-    printf '%s\n' "$rows"
+  merged_rows="$(
+    {
+      if [[ -n "$rows" ]]; then
+        printf '%s\n' "$rows"
+      fi
+      fallback_nodes
+    } | merge_node_rows
+  )"
+
+  if [[ -n "$merged_rows" ]]; then
+    printf '%s\n' "$merged_rows"
     return 0
   fi
 
@@ -687,10 +529,10 @@ benchmark_host() {
 print_success_table() {
   local rows="$1"
   printf 'Success Nodes\n'
-  printf '%-12s %-28s %-6s %-10s %-10s %s\n' "Label" "Host" "HTTP" "TTFB(s)" "Total(s)" "URL"
-  while IFS=$'\t' read -r label host status ttfb total url; do
+  printf '%-28s %-6s %-10s %-10s %s\n' "Host" "HTTP" "TTFB(s)" "Total(s)" "URL"
+  while IFS=$'\t' read -r _label host status ttfb total url; do
     [[ -n "${host:-}" ]] || continue
-    printf '%-12s %-28s %-6s %-10s %-10s %s\n' "$label" "$host" "$status" "$ttfb" "$total" "$url"
+    printf '%-28s %-6s %-10s %-10s %s\n' "$host" "$status" "$ttfb" "$total" "$url"
   done <<<"$rows"
 }
 

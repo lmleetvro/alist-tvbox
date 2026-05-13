@@ -494,7 +494,7 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
-import {isPluginDragEnabledForWidth} from "@/utils/pluginDragSupport.mjs";
+import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
 interface Sub {
   sid: '',
@@ -637,14 +637,10 @@ const pluginFilterForm = ref<PluginFilter>({
   lastError: ''
 })
 const selectedPluginFilterIds = ref<number[]>([])
-const pluginDragEnabled = ref(isPluginDragEnabledForWidth(window.innerWidth))
+const pluginDragEnabled = ref(isPluginDragEnabledForUserAgent(window.navigator.userAgent))
 let timer = 0
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
-
-const syncPluginDragEnabled = () => {
-  pluginDragEnabled.value = isPluginDragEnabledForWidth(window.innerWidth)
-}
 
 const handleLogin = () => {
   axios.get('/api/telegram/user').then(({data}) => {
@@ -1221,19 +1217,7 @@ watch(() => pluginImportForm.value.url, (value) => {
   localStorage.setItem(PLUGIN_REPO_URL_KEY, value)
 })
 
-watch(pluginDragEnabled, () => {
-  nextTick(() => {
-    if (pluginVisible.value) {
-      enablePluginRowDrop()
-    }
-    if (pluginFilterVisible.value) {
-      enablePluginFilterRowDrop()
-    }
-  })
-})
-
 onMounted(() => {
-  window.addEventListener('resize', syncPluginDragEnabled)
   axios.get('/api/token').then(({data}) => {
     tokens.value =  data.token ? data.token.split(",") : ['-']
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
@@ -1247,7 +1231,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', syncPluginDragEnabled)
   clearInterval(timer)
   pluginSortable?.destroy()
   pluginFilterSortable?.destroy()

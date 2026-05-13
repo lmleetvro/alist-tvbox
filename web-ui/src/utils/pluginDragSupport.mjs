@@ -1,3 +1,5 @@
-export const MOBILE_PLUGIN_DRAG_MAX_WIDTH = 767
+export const MOBILE_BROWSER_USER_AGENT = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
 
-export const isPluginDragEnabledForWidth = (width) => width > MOBILE_PLUGIN_DRAG_MAX_WIDTH
+export const isMobileBrowserUserAgent = (userAgent = '') => MOBILE_BROWSER_USER_AGENT.test(userAgent)
+
+export const isPluginDragEnabledForUserAgent = (userAgent = '') => !isMobileBrowserUserAgent(userAgent)

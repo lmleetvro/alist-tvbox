@@ -1,5 +1,7 @@
 declare module '@/utils/pluginDragSupport.mjs' {
-  export const MOBILE_PLUGIN_DRAG_MAX_WIDTH: number
+  export const MOBILE_BROWSER_USER_AGENT: RegExp
 
-  export function isPluginDragEnabledForWidth(width: number): boolean
+  export function isMobileBrowserUserAgent(userAgent?: string): boolean
+
+  export function isPluginDragEnabledForUserAgent(userAgent?: string): boolean
 }

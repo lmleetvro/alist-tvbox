@@ -343,11 +343,19 @@
         </el-form-item>
       </el-form>
 
+      <el-alert
+        v-if="!pluginDragEnabled"
+        class="plugin-drag-tip"
+        title="小屏幕不支持拖拽排序，请在大屏设备操作"
+        type="info"
+        :closable="false"
+      />
+
       <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
           <template #default="scope">
-            <span class="pointer">{{ scope.row.sortOrder }}</span>
+            <span :class="pluginDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.sortOrder }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="name" label="名称" width="180">
@@ -416,6 +424,14 @@
         </el-form-item>
       </el-form>
 
+      <el-alert
+        v-if="!pluginDragEnabled"
+        class="plugin-drag-tip"
+        title="小屏幕不支持拖拽排序，请在大屏设备操作"
+        type="info"
+        :closable="false"
+      />
+
       <el-table
         :data="pluginFilters"
         row-key="id"
@@ -427,7 +443,7 @@
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
           <template #default="scope">
-            <span class="pointer">{{ scope.row.sortOrder }}</span>
+            <span :class="pluginDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.sortOrder }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="name" label="名称" width="180">
@@ -494,6 +510,7 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
+import {isPluginDragEnabledForWidth} from "@/utils/pluginDragSupport.mjs";
 
 interface Sub {
   sid: '',
@@ -636,9 +653,14 @@ const pluginFilterForm = ref<PluginFilter>({
   lastError: ''
 })
 const selectedPluginFilterIds = ref<number[]>([])
+const pluginDragEnabled = ref(isPluginDragEnabledForWidth(window.innerWidth))
 let timer = 0
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
+
+const syncPluginDragEnabled = () => {
+  pluginDragEnabled.value = isPluginDragEnabledForWidth(window.innerWidth)
+}
 
 const handleLogin = () => {
   axios.get('/api/telegram/user').then(({data}) => {
@@ -818,6 +840,11 @@ const formatPluginCheckedAt = (value: string) => {
 }
 
 const enablePluginRowDrop = () => {
+  if (!pluginDragEnabled.value) {
+    pluginSortable?.destroy()
+    pluginSortable = null
+    return
+  }
   const tbody = document.querySelector('#plugins-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
     return
@@ -844,6 +871,11 @@ const enablePluginRowDrop = () => {
 }
 
 const enablePluginFilterRowDrop = () => {
+  if (!pluginDragEnabled.value) {
+    pluginFilterSortable?.destroy()
+    pluginFilterSortable = null
+    return
+  }
   const tbody = document.querySelector('#plugin-filters-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
     return
@@ -1205,7 +1237,19 @@ watch(() => pluginImportForm.value.url, (value) => {
   localStorage.setItem(PLUGIN_REPO_URL_KEY, value)
 })
 
+watch(pluginDragEnabled, () => {
+  nextTick(() => {
+    if (pluginVisible.value) {
+      enablePluginRowDrop()
+    }
+    if (pluginFilterVisible.value) {
+      enablePluginFilterRowDrop()
+    }
+  })
+})
+
 onMounted(() => {
+  window.addEventListener('resize', syncPluginDragEnabled)
   axios.get('/api/token').then(({data}) => {
     tokens.value =  data.token ? data.token.split(",") : ['-']
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
@@ -1219,6 +1263,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', syncPluginDragEnabled)
   clearInterval(timer)
   pluginSortable?.destroy()
   pluginFilterSortable?.destroy()
@@ -1236,6 +1281,14 @@ onUnmounted(() => {
 
 .pointer {
   cursor: move;
+}
+
+.order-text {
+  cursor: default;
+}
+
+.plugin-drag-tip {
+  margin-bottom: 12px;
 }
 
 .json pre {

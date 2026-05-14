@@ -822,6 +822,15 @@ class Spider(HostSpider):
         #     return proxy.json()
         return self._run_filters("play", json.loads(body), self._build_player_context(play_id=play_id))
 
+    def _empty_category_result(self):
+        return {
+            "list": [],
+            "page": 1,
+            "pagecount": 1,
+            "limit": 0,
+            "total": 0,
+        }
+
     def _split_detail_to_vods(self, source_id):
         detail_result = self._require_inner().detailContent([source_id])
         detail_result = self._run_filters("detail", detail_result, {"ids": [source_id], "source": "category"})
@@ -829,21 +838,21 @@ class Spider(HostSpider):
         self._cache_play_context(detail_result)
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
         if not isinstance(vod_list, list) or len(vod_list) != 1:
-            return None
+            return self._empty_category_result()
 
         vod = vod_list[0]
         if not isinstance(vod, dict):
-            return None
+            return self._empty_category_result()
 
         play_from_value = str(vod.get("vod_play_from") or "")
         play_url_value = str(vod.get("vod_play_url") or "")
         if not play_from_value or not play_url_value:
-            return None
+            return self._empty_category_result()
 
         from_groups = play_from_value.split("$$$")
         url_groups = play_url_value.split("$$$")
         if len(from_groups) != len(url_groups):
-            return None
+            return self._empty_category_result()
 
         items = []
         for index, (from_group, url_group) in enumerate(zip(from_groups, url_groups), start=1):

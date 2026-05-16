@@ -24,56 +24,57 @@ class _FallbackSpider(metaclass=ABCMeta):
     _instance = None
 
     def __init__(self):
-        self.extend = ""
+        self.extend = ''
 
     def __new__(cls, *args, **kwargs):
         if cls._instance:
             return cls._instance
-        cls._instance = super().__new__(cls)
-        return cls._instance
+        else:
+            cls._instance = super().__new__(cls)
+            return cls._instance
 
     @abstractmethod
     def init(self, extend=""):
         pass
 
     def homeContent(self, filter):
-        raise NotImplementedError
+        pass
 
     def homeVideoContent(self):
-        raise NotImplementedError
+        pass
 
     def categoryContent(self, tid, pg, filter, extend):
-        raise NotImplementedError
+        pass
 
     def detailContent(self, ids):
-        raise NotImplementedError
+        pass
 
     def searchContent(self, key, quick, pg="1"):
-        raise NotImplementedError
+        pass
 
     def playerContent(self, flag, id, vipFlags):
-        raise NotImplementedError
+        pass
 
     def liveContent(self, url):
-        raise NotImplementedError
+        pass
 
     def localProxy(self, param):
-        raise NotImplementedError
+        pass
 
     def isVideoFormat(self, url):
-        raise NotImplementedError
+        pass
 
     def manualVideoCheck(self):
-        raise NotImplementedError
+        pass
 
     def action(self, action):
-        raise NotImplementedError
+        pass
 
     def destroy(self):
-        return None
+        pass
 
     def getName(self):
-        raise NotImplementedError
+        pass
 
     def getDependence(self):
         return []
@@ -86,73 +87,43 @@ class _FallbackSpider(metaclass=ABCMeta):
         return SourceFileLoader(name, path).load_module()
 
     def regStr(self, reg, src, group=1):
-        match = re.search(reg, src)
-        return match.group(group) if match else ""
+        m = re.search(reg, src)
+        src = ''
+        if m:
+            src = m.group(group)
+        return src
 
     def removeHtmlTags(self, src):
-        return re.sub(re.compile("<.*?>"), "", src)
+        clean = re.compile('<.*?>')
+        return re.sub(clean, '', src)
 
     def cleanText(self, src):
-        return re.sub(
-            "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF]",
-            "",
-            src,
-        )
+        clean = re.sub('[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF]', '',
+                       src)
+        return clean
 
-    def fetch(
-            self,
-            url,
-            params=None,
-            cookies=None,
-            headers=None,
-            timeout=5,
-            verify=True,
-            stream=False,
-            allow_redirects=True,
-    ):
-        rsp = requests.get(
-            url,
-            params=params,
-            cookies=cookies,
-            headers=headers,
-            timeout=timeout,
-            verify=verify,
-            stream=stream,
-            allow_redirects=allow_redirects,
-        )
-        rsp.encoding = "utf-8"
+    def fetch(self, url, params=None, cookies=None, headers=None, timeout=5, verify=True, stream=False,
+              allow_redirects=True):
+        rsp = requests.get(url, params=params, cookies=cookies, headers=headers, timeout=timeout, verify=verify,
+                           stream=stream, allow_redirects=allow_redirects)
+        rsp.encoding = 'utf-8'
         return rsp
 
-    def post(
-            self,
-            url,
-            params=None,
-            data=None,
-            json=None,
-            cookies=None,
-            headers=None,
-            timeout=5,
-            verify=True,
-            stream=False,
-            allow_redirects=True,
-    ):
-        rsp = requests.post(
-            url,
-            params=params,
-            data=data,
-            json=json,
-            cookies=cookies,
-            headers=headers,
-            timeout=timeout,
-            verify=verify,
-            stream=stream,
-            allow_redirects=allow_redirects,
-        )
-        rsp.encoding = "utf-8"
+    def post(self, url, params=None, data=None, json=None, cookies=None, headers=None, timeout=5, verify=True,
+             stream=False, allow_redirects=True):
+        rsp = requests.post(url, params=params, data=data, json=json, cookies=cookies, headers=headers, timeout=timeout,
+                            verify=verify, stream=stream, allow_redirects=allow_redirects)
+        rsp.encoding = 'utf-8'
         return rsp
 
     def html(self, content):
         return etree.HTML(content)
+
+    def str2json(str):
+        return json.loads(str)
+
+    def json2str(str):
+        return json.dumps(str, ensure_ascii=False)
 
     def getProxyUrl(self, local=True):
         raise NotImplementedError("Proxy runtime is not available in local tests")
@@ -192,6 +163,8 @@ class Spider(HostSpider):
     MASTER_SECRET_XOR = 41
     DETAIL_PREFIX = "atvp_detail:"
     PUSH_PREFIX = "push://"
+    _LEADING_XML_DECL_RE = re.compile(r"<\?xml[^>]*\?>", re.I)
+    _LEADING_HTML_TRIM_CHARS = "\ufeff" + "".join(chr(index) for index in range(33))
     _public_key_chunks = [
         "N0dCVVteVDdcUk46Ojo6Og==",
         "ZCBTJG0vKh06Ojo6OlJZUw==",
@@ -481,6 +454,62 @@ class Spider(HostSpider):
             raise ValueError("Atvp secspider source hash mismatch")
         return source_bytes.decode("utf-8")
 
+    def _sanitize_html_content(self, content):
+        if isinstance(content, bytes):
+            text = None
+            for encoding in (
+                    "utf-8-sig",
+                    "utf-8",
+                    "utf-16",
+                    "utf-16le",
+                    "utf-16be",
+                    "utf-32",
+                    "utf-32le",
+                    "utf-32be",
+            ):
+                try:
+                    text = content.decode(encoding)
+                    break
+                except Exception:
+                    continue
+            if text is None:
+                text = content.decode("utf-8", "ignore")
+        elif isinstance(content, str):
+            text = content
+        elif content is None:
+            text = ""
+        else:
+            text = str(content)
+
+        text = text.replace("\x00", "")
+        stripped = text.lstrip(self._LEADING_HTML_TRIM_CHARS)
+        if not stripped:
+            return stripped
+
+        while stripped:
+            match = self._LEADING_XML_DECL_RE.match(stripped)
+            if match is None:
+                break
+            stripped = stripped[match.end():].lstrip(self._LEADING_HTML_TRIM_CHARS)
+        return stripped
+
+    def _patch_inner_spider_html(self, spider_cls):
+        original_html = getattr(spider_cls, "html", None)
+        outer = self
+
+        def _wrapped_html(instance, content):
+            sanitized = outer._sanitize_html_content(content)
+            if callable(original_html):
+                try:
+                    return original_html(instance, sanitized)
+                except etree.XMLSyntaxError as exc:
+                    if "encoding not supported" not in str(exc):
+                        raise
+            return HostSpider.html(instance, sanitized)
+
+        spider_cls.html = _wrapped_html
+        return spider_cls
+
     def _load_inner_spider_class(self, source_text):
         module = types.ModuleType("atvp_inner_spider")
         module.__file__ = "<atvp-inner>"
@@ -488,7 +517,7 @@ class Spider(HostSpider):
         spider_cls = getattr(module, "Spider", None)
         if spider_cls is None:
             raise ValueError("Atvp inner source does not export Spider")
-        return spider_cls
+        return self._patch_inner_spider_html(spider_cls)
 
     def _load_filter_source(self, source):
         target = str(source or "").strip()
